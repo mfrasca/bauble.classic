@@ -266,12 +266,14 @@ def create(import_defaults=True):
 
         # fill in the bauble meta table and install all the plugins
         meta_table = meta.BaubleMeta.__table__
-        meta_table.insert(bind=connection).\
-            execute(name=meta.VERSION_KEY,
-                    value=unicode(bauble.version)).close()
-        meta_table.insert(bind=connection).\
-            execute(name=meta.CREATED_KEY,
-                    value=unicode(datetime.datetime.now())).close()
+        meta_table.insert(
+            bind=connection).execute(
+                name=meta.VERSION_KEY,
+                value=unicode(bauble.version)).close()
+        meta_table.insert(
+            bind=connection).execute(
+                name=meta.CREATED_KEY,
+                value=unicode(datetime.datetime.now())).close()
     except GeneratorExit, e:
         # this is here in case the main windows is closed in the middle
         # of a task

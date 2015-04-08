@@ -14,6 +14,6 @@
 # along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 
 # major, minor, revision version tuple
-version = "1.0.12dev"
+version = "1.2.0dev"
 """The Bauble version.
 """
