@@ -16,9 +16,7 @@ from sqlalchemy.orm.exc import *
 import bauble
 import bauble.utils as utils
 from bauble.utils.log import debug
-from bauble.plugins.plants.species import *
-from bauble.plugins.plants.family import *
-from bauble.plugins.plants.genus import *
+from bauble.plugins.plants.taxon import *
 from bauble.plugins.plants.geography import *
 from bauble.test import BaubleTestCase, check_dupids
 
@@ -44,62 +42,65 @@ if sys.platform == 'win32':
     Species.hybrid_char = 'x'
 
 
-family_test_data = ({'id': 1, 'family': 'Orchidaceae'},
-                    {'id': 2, 'family': 'Leguminosae'},
-                    {'id': 3, 'family': 'Polypodiaceae'})
-
-genus_test_data = ({'id': 1, 'genus': 'Maxillaria', 'family_id': 1},
-                   {'id': 2, 'genus': 'Encyclia', 'family_id': 1},
-                   {'id': 3, 'genus': 'Abrus', 'family_id': 2},
-                   {'id': 4, 'genus': 'Campyloneurum', 'family_id': 3},
-                   )
-
-species_test_data = ({'id': 1, 'sp': u'variabilis', 'genus_id': 1,
-                      'sp_author': u'Bateman ex Lindl.'},
-                     {'id': 2, 'sp': u'cochleata', 'genus_id': 2,
-                      'sp_author': u'(L.) Lem\xe9e'},
-                     {'id': 3, 'sp': u'precatorius', 'genus_id': 3,
-                      'sp_author': u'L.'},
-                     {'id': 4, 'sp': u'alapense', 'genus_id': 4,
-                      'hybrid': True, 'sp_author': u'F\xe9e'},
-                     {'id': 5, 'sp': u'cochleata', 'genus_id': 2,
-                      'sp_author': u'(L.) Lem\xe9e',
-                      'infrasp1_rank': u'var.', 'infrasp1': u'cochleata'},
-                     {'id': 6, 'sp': u'cochleata', 'genus_id': 2,
-                      'sp_author': u'(L.) Lem\xe9e',
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Black Night'},
-                     {'id': 7, 'sp': u'precatorius', 'genus_id': 3,
-                      'sp_author': u'L.', 'cv_group': u'SomethingRidiculous'},
-                     {'id': 8, 'sp': u'precatorius', 'genus_id': 3,
-                      'sp_author': u'L.',
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Hot Rio Nights',
-                      'cv_group': u'SomethingRidiculous'},
-                     {'id': 9, 'sp': u'generalis', 'genus_id': 1,
-                      'hybrid': True,
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Red'},
-                     {'id': 10, 'sp': u'generalis', 'genus_id': 1,
-                      'hybrid': True, 'sp_author': u'L.',
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Red',
-                      'cv_group': u'SomeGroup'},
-                     {'id': 11, 'sp': u'generalis', 'genus_id': 1,
-                      'sp_qual': u'agg.'},
-                     {'id': 12, 'genus_id': 1, 'cv_group': u'SomeGroup'},
-                     {'id': 13, 'genus_id':1,
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Red'},
-                     {'id': 14, 'genus_id':1,
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Red & Blue'},
-                     {'id': 15, 'sp': u'cochleata', 'genus_id': 2,
-                      'sp_author': u'L.',
-                      'infrasp1_rank': u'subsp.', 'infrasp1': u'cochleata',
-                      'infrasp1_author': u'L.',
-                      'infrasp2_rank': u'var.', 'infrasp2': u'cochleata',
-                      'infrasp2_author': u'L.',
-                      'infrasp3_rank': u'cv.', 'infrasp3': u'Black',
-                      'infrasp3_author': u'L.'},
-                     {'id': 16, 'genus_id': 1, 'sp': u'test',
-                      'infrasp1_rank': u'subsp.', 'infrasp1': u'test',
-                      'cv_group': u'SomeGroup'},
-                     )
+taxon_test_data = (
+    ## familiae
+    {'id': 1, 'rank': 'familia', 'epithet': 'Orchidaceae', 'parent': None},
+    {'id': 2, 'rank': 'familia', 'epithet': 'Leguminosae', 'parent': None},
+    {'id': 3, 'rank': 'familia', 'epithet': 'Polypodiaceae', 'parent': None},
+    ## genera
+    {'id': 11, 'rank': 'genus', 'epithet': 'Maxillaria', 'parent_id': 1},
+    {'id': 12, 'rank': 'genus', 'epithet': 'Encyclia', 'parent_id': 1},
+    {'id': 13, 'rank': 'genus', 'epithet': 'Abrus', 'parent_id': 2},
+    {'id': 14, 'rank': 'genus', 'epithet': 'Campyloneurum', 'parent_id': 3},
+    ## species
+    {'id': 31, 'rank': 'species', 'epithet': u'variabilis', 'parent_id': 11,
+     'sp_author': u'Bateman ex Lindl.'},
+    {'id': 32, 'rank': 'species', 'epithet': u'cochleata', 'genus_id': 2,
+     'sp_author': u'(L.) Lem\xe9e'},
+    {'id': 33, 'rank': 'species', 'epithet': u'precatorius', 'genus_id': 3,
+     'sp_author': u'L.'},
+    ## varietates / subspecies
+    {'id': 35, 'rank': 'varietas', 'epithet': u'cochleata', 'genus_id': 2,
+     'sp_author': u'(L.) Lem\xe9e',
+     'infrasp1_rank': u'var.', 'infrasp1': u'cochleata'},
+    {'id': 45, 'sp': u'cochleata', 'genus_id': 2,
+     'sp_author': u'L.',
+     'infrasp1_rank': u'subsp.', 'infrasp1': u'cochleata',
+     'infrasp1_author': u'L.',
+     'infrasp2_rank': u'var.', 'infrasp2': u'cochleata',
+     'infrasp2_author': u'L.',
+     'infrasp3_rank': u'cv.', 'infrasp3': u'Black',
+     'infrasp3_author': u'L.'},
+    {'id': 46, 'genus_id': 1, 'sp': u'test',
+     'infrasp1_rank': u'subsp.', 'infrasp1': u'test',
+     'cv_group': u'SomeGroup'},
+    ## hybridi
+    {'id': 34, 'rank': 'species', 'epithet': u'alapense', 'genus_id': 4,
+     'hybrid': True, 'sp_author': u'F\xe9e'},
+    {'id': 36, 'sp': u'cochleata', 'genus_id': 2,
+     'sp_author': u'(L.) Lem\xe9e',
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Black Night'},
+    {'id': 37, 'sp': u'precatorius', 'genus_id': 3,
+     'sp_author': u'L.', 'cv_group': u'SomethingRidiculous'},
+    {'id': 38, 'sp': u'precatorius', 'genus_id': 3,
+     'sp_author': u'L.',
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Hot Rio Nights',
+     'cv_group': u'SomethingRidiculous'},
+    {'id': 39, 'sp': u'generalis', 'genus_id': 1,
+     'hybrid': True,
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Red'},
+    {'id': 40, 'sp': u'generalis', 'genus_id': 1,
+     'hybrid': True, 'sp_author': u'L.',
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Red',
+     'cv_group': u'SomeGroup'},
+    {'id': 41, 'sp': u'generalis', 'genus_id': 1,
+     'sp_qual': u'agg.'},
+    {'id': 42, 'genus_id': 1, 'cv_group': u'SomeGroup'},
+    {'id': 43, 'genus_id':1,
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Red'},
+    {'id': 44, 'genus_id':1,
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Red & Blue'},
+)
 
 species_str_map = {\
     1: 'Maxillaria variabilis',

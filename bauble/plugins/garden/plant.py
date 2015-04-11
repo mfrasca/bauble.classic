@@ -105,7 +105,7 @@ plant_context_menu = [edit_action, branch_action, remove_action]
 def plant_markup_func(plant):
     '''
     '''
-    sp_str = plant.accession.species_str(markup=True)
+    sp_str = plant.accession.taxon_str(markup=True)
     #dead_color = "#777"
     dead_color = "#9900ff"
     if plant.quantity <= 0:
@@ -295,8 +295,8 @@ fruiting_values = {
     None: '',
 }
 
-# TODO: should sex be recorded at the species, accession or plant
-# level or just as part of a check since sex can change in some species
+# TODO: should sex be recorded at the taxon, accession or plant
+# level or just as part of a check since sex can change in some taxon
 sex_values = {
     u'Female': _('Female'),
     u'Male': _('Male'),
@@ -483,7 +483,7 @@ class Plant(db.Base):
         # plant names around but makes expanding the location essential
         # or you don't know what plants you are looking at
         return "%s%s%s (%s)" % (self.accession, self.delimiter, self.code,
-                                self.accession.species_str(markup=True))
+                                self.accession.taxon_str(markup=True))
 
 
 from bauble.plugins.garden.accession import Accession
@@ -522,7 +522,7 @@ class PlantEditorView(GenericEditorView):
         self.widgets.pad_next_button.set_sensitive(False)
         def acc_cell_data_func(column, renderer, model, treeiter, data=None):
             v = model[treeiter][0]
-            renderer.set_property('text', '%s (%s)' % (str(v), str(v.species)))
+            renderer.set_property('text', '%s (%s)' % (str(v), str(v.taxon)))
         self.attach_completion('plant_acc_entry', acc_cell_data_func,
                                minimum_key_length=2)
         self.init_translatable_combo('plant_acc_type_combo', acc_type_values)
@@ -638,18 +638,18 @@ class PlantEditorPresenter(GenericEditorPresenter):
             self.set_model_attr('accession', value)
             # reset the plant code to check that this is a valid code for the
             # new accession, fixes bug #103946
-            self.view.widgets.acc_species_label.set_markup('')
+            self.view.widgets.acc_taxon_label.set_markup('')
             if value is not None:
-                sp_str = Species.str(self.model.accession.species, markup=True)
-                self.view.widgets.acc_species_label.set_markup(sp_str)
+                sp_str = Taxon.str(self.model.accession.taxon, markup=True)
+                self.view.widgets.acc_taxon_label.set_markup(sp_str)
                 self.view.widgets.plant_code_entry.emit('changed')
         self.assign_completions_handler('plant_acc_entry', acc_get_completions,
                                         on_select=on_select)
         if self.model.accession:
-            sp_str = Species.str(self.model.accession.species, markup=True)
+            sp_str = Taxon.str(self.model.accession.taxon, markup=True)
         else:
             sp_str = ''
-        self.view.widgets.acc_species_label.set_markup(sp_str)
+        self.view.widgets.acc_taxon_label.set_markup(sp_str)
 
         self.view.connect('plant_code_entry', 'changed',
                           self.on_plant_code_entry_changed)
@@ -999,7 +999,7 @@ class PlantEditor(GenericModelViewPresenterEditor):
                 self._commited = sub_editor.start()
         if self.session.query(Location).count() == 0:
             msg = 'You must first add or import at least one Location into '\
-                  'the database before you can add species.\n\nWould you '\
+                  'the database before you can add taxon.\n\nWould you '\
                   'like to open the Location editor?'
             if utils.yes_no_dialog(msg):
                 # cleanup in case we start a new PlantEditor
@@ -1057,9 +1057,9 @@ class GeneralPlantExpander(InfoExpander):
         utils.make_label_clickable(self.widgets.acc_code_data,
                                    on_acc_code_clicked)
 
-        def on_species_clicked(*args):
-            select_in_search_results(self.current_obj.accession.species)
-        utils.make_label_clickable(self.widgets.name_data, on_species_clicked)
+        def on_taxon_clicked(*args):
+            select_in_search_results(self.current_obj.accession.taxon)
+        utils.make_label_clickable(self.widgets.name_data, on_taxon_clicked)
 
         def on_location_clicked(*args):
             select_in_search_results(self.current_obj.location)
@@ -1081,7 +1081,7 @@ class GeneralPlantExpander(InfoExpander):
         self.set_widget_value('plant_code_data', '<big>%s</big>' % \
                               utils.xml_safe(unicode(tail)), markup=True)
         self.set_widget_value('name_data',
-                              row.accession.species_str(markup=True),
+                              row.accession.taxon_str(markup=True),
                               markup=True)
         self.set_widget_value('location_data', str(row.location))
         self.set_widget_value('quantity_data', row.quantity)
