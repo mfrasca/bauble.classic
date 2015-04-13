@@ -120,45 +120,8 @@ def vernname_markup_func(vernname):
     return str(vernname), vernname.species.markup(authors=False)
 
 
-from bauble.view import InfoBox, InfoBoxPage, InfoExpander, \
-    select_in_search_results
-
-
-class SynonymSearch(search.SearchStrategy):
-    """
-    Return any synonyms for matching species.
-
-    This can by setting bauble.search.return_synonyms in the prefs to False.
-    """
-    return_synonyms_pref = 'bauble.search.return_synonyms'
-
-    def __init__(self):
-        super(SynonymSearch, self).__init__()
-        if self.return_synonyms_pref not in prefs:
-            prefs[self.return_synonyms_pref] = True
-            prefs.save()
-
-    def search(self, text, session):
-        super(SynonymSearch, self).search(text, session)
-        if not prefs[self.return_synonyms_pref]:
-            return
-        mapper_search = search.get_strategy('MapperSearch')
-        r1 = mapper_search.search(text, session)
-        if not r1:
-            return []
-        results = []
-        for result in r1:
-            # iterate through the results and see if we can find some
-            # synonyms for the returned values
-            if isinstance(result, Species):
-                q = session.query(SpeciesSynonym).\
-                    filter_by(synonym_id=result.id)
-                results.extend([syn.species for syn in q])
-            elif isinstance(results, VernacularName):
-                q = session.query(SpeciesSynonym).\
-                    filter_by(synonym_id=result.species.id)
-                results.extend([syn.species for syn in q])
-        return results
+from bauble.view import InfoBox, InfoBoxPage, InfoExpander
+from bauble.view import select_in_search_results
 
 
 #
@@ -200,50 +163,6 @@ class VernacularExpander(InfoExpander):
             self.set_sensitive(True)
             # TODO: get expanded state from prefs
             self.set_expanded(True)
-
-
-
-class SynonymsExpander(InfoExpander):
-
-    def __init__(self, widgets):
-        InfoExpander.__init__(self, _("Synonyms"), widgets)
-        synonyms_box = self.widgets.sp_synonyms_box
-        self.widgets.remove_parent(synonyms_box)
-        self.vbox.pack_start(synonyms_box)
-
-
-    def update(self, row):
-        '''
-        update the expander
-
-        :param row: the row to get thevalues from
-        '''
-        #debug(row.synonyms)
-        if len(row.synonyms) == 0:
-            self.set_sensitive(False)
-            self.set_expanded(False)
-        else:
-            def on_label_clicked(label, event, syn):
-                select_in_search_results(syn)
-            syn_box = self.widgets.sp_synonyms_box
-            # remove all the children
-            syn_box.foreach(syn_box.remove)
-            for syn in row.synonyms:
-                # create clickable label that will select the synonym
-                # in the search results
-                box = gtk.EventBox()
-                label = gtk.Label()
-                label.set_alignment(0, .5)
-                label.set_markup(Species.str(syn, markup=True, authors=True))
-                box.add(label)
-                utils.make_label_clickable(label, on_label_clicked, syn)
-                syn_box.pack_start(box, expand=False, fill=False)
-            self.show_all()
-
-            self.set_sensitive(True)
-            # TODO: get expanded state from prefs
-            self.set_expanded(True)
-
 
 
 class GeneralSpeciesExpander(InfoExpander):
@@ -415,7 +334,6 @@ class SpeciesInfoBox(InfoBox):
         self.insert_page(page, label, 1)
 
 
-
 class SpeciesInfoPage(InfoBoxPage):
     '''
     general info, fullname, common name, num of accessions and clones,
@@ -454,7 +372,6 @@ class SpeciesInfoPage(InfoBoxPage):
             self.widgets.remove_parent('sp_nacc_data')
             self.widgets.remove_parent('sp_nplants_label')
             self.widgets.remove_parent('sp_nplants_data')
-
 
     def update(self, row):
         '''

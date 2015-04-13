@@ -53,7 +53,6 @@ class PlantsPlugin(pluginmgr.Plugin):
                                         context_menu=genus_context_menu,
                                         markup_func=genus_markup_func)
 
-        search.add_strategy(SynonymSearch)
         mapper_search.add_meta(('species', 'sp'), Species,
                                ['sp', 'sp2', 'infrasp1', 'infrasp2',
                                 'infrasp3', 'infrasp4'])

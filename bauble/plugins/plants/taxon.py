@@ -48,3 +48,10 @@ class Taxon(db.Base):
                        name='taxon_ranks'), index=True)
     sp_author = Column(Unicode(128))
 
+    habit_id = Column(Integer, ForeignKey('habit.id'), default=None)
+    habit = relation('Habit', uselist=False, backref='species')
+
+    flower_color_id = Column(Integer, ForeignKey('color.id'), default=None)
+    flower_color = relation('Color', uselist=False, backref='species')
+
+    awards = Column(UnicodeText)

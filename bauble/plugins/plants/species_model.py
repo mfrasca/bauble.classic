@@ -182,20 +182,15 @@ class Species(db.Base):
                          cascade='all, delete-orphan', uselist=True,
                          backref='species')
 
-    # this is a dummy relation, it is only here to make cascading work
-    # correctly and to ensure that all synonyms related to this genus
-    # get deleted if this genus gets deleted
-    _syn = relation('SpeciesSynonym',
-                     primaryjoin='Species.id==SpeciesSynonym.synonym_id',
-                     cascade='all, delete-orphan', uselist=True)
-
-    vernacular_names = relation('VernacularName', cascade='all, delete-orphan',
-                                 collection_class=VNList,
+    vernacular_names = relation('VernacularName', 
+                                cascade='all, delete-orphan',
+                                collection_class=VNList,
                                 backref=backref('species', uselist=False))
-    _default_vernacular_name = relation('DefaultVernacularName', uselist=False,
-                                         cascade='all, delete-orphan',
-                                         backref=backref('species',
-                                                         uselist=False))
+    _default_vernacular_name = relation('DefaultVernacularName', 
+                                        uselist=False,
+                                        cascade='all, delete-orphan',
+                                        backref=backref('species',
+                                                        uselist=False))
     distribution = relation('SpeciesDistribution',
                             cascade='all, delete-orphan',
                             backref=backref('species', uselist=False))
