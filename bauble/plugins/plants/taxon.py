@@ -55,3 +55,73 @@ class Taxon(db.Base):
     flower_color = relation('Color', uselist=False, backref='species')
 
     awards = Column(UnicodeText)
+
+
+class Habit(db.Base):
+    __tablename__ = 'habit'
+
+    name = Column(Unicode(64))
+    code = Column(Unicode(8), unique=True)
+
+    def __str__(self):
+        if self.name:
+            return '%s (%s)' % (self.name, self.code)
+        else:
+            return str(self.code)
+
+
+class Color(db.Base):
+    __tablename__ = 'color'
+
+    name = Column(Unicode(32))
+    code = Column(Unicode(8), unique=True)
+
+    def __str__(self):
+        if self.name:
+            return '%s (%s)' % (self.name, self.code)
+        else:
+            return str(self.code)
+
+
+class VernacularName(db.Base):
+    """vernacular names associated to a taxon(species). 
+
+
+    this need not be unique, the same language one vernacular name can
+    correspond to several different species. also, one species can have
+    several vernacular names, within the same cultural area.
+
+    :Table name: vernacular_name
+
+    :Columns:
+        *name*:
+            the vernacular name
+
+        *language*:
+            a code for a language, optionally followed by a description 
+            of the area within the language.
+            language is free text and could include something like UK
+            or US to identify the origin of the name
+
+        *species_id*:
+            key to the species this vernacular name refers to
+
+    :Properties:
+
+    :Constraints:
+
+    """
+    __tablename__ = 'vernacular_name'
+    name = Column(Unicode(128), nullable=False)
+    language = Column(Unicode(128))
+    species_id = Column(Integer, ForeignKey('species.id'), nullable=False)
+    __table_args__ = (UniqueConstraint('name', 'language',
+                                       'species_id', name='vn_index'), {})
+
+    def __str__(self):
+        if self.name:
+            return self.name
+        else:
+            return ''
+
+
