@@ -6,7 +6,7 @@ running tasks still block but allows the GUI to update.
 """
 
 import fibra
-import gtk
+from gi.repository import Gtk
 import bauble
 
 # TODO: after some specified time the status bar should be cleared but not
@@ -49,8 +49,8 @@ def _idle():
     """
     Called when a task is idle.
     """
-    while gtk.events_pending():
-        gtk.main_iteration(block=False)
+    while Gtk.events_pending():
+        Gtk.main_iteration(block=False)
 
     global __kill
     if __kill:

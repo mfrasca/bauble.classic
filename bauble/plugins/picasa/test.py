@@ -1,7 +1,7 @@
 import os
 from nose import *
 
-import gtk
+from gi.repository import Gtk
 
 import bauble.meta as meta
 import bauble.plugins.picasa as picasa
@@ -106,11 +106,11 @@ class PicasaTests(BaubleTestCase):
         sp = Species(genus=g, sp=u'elatior')
         self.session.add_all([f, g, sp])
         self.session.commit()
-        self.dialog = gtk.Dialog()
+        self.dialog = Gtk.Dialog()
         self.dialog.set_size_request(250, 700)
         page = picasa.PicasaInfoPage()
         page.update(sp)
-        self.dialog.vbox.pack_start(page)
+        self.dialog.vbox.pack_start(page, True, True, 0)
         self.dialog.show_all()
         self.dialog.run()
 
@@ -120,7 +120,7 @@ class PicasaTests(BaubleTestCase):
         """
         Interactively test picasa.get_photo_feed()
         """
-        if self._get_settings() != gtk.RESPONSE_OK:
+        if self._get_settings() != Gtk.ResponseType.OK:
             return
 
         email = meta.get_default(picasa.PICASA_EMAIL_KEY).value

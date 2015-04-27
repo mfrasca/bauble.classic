@@ -21,7 +21,8 @@
 
 import weakref
 
-import gtk
+from gi.repository import Gtk
+from bauble.i18n import _
 
 from sqlalchemy import or_
 from sqlalchemy import Unicode
@@ -535,7 +536,7 @@ def get_strategy(name):
     return _search_strategies.get(name, None)
 
 
-class SchemaBrowser(gtk.VBox):
+class SchemaBrowser(Gtk.VBox):
 
     def __init__(self, *args, **kwargs):
         super(SchemaBrowser, self).__init__(*args, **kwargs)
@@ -544,29 +545,29 @@ class SchemaBrowser(gtk.VBox):
         self.domain_map = {}
         self.domain_map = MapperSearch.get_domain_classes().copy()
 
-        frame = gtk.Frame(_("Search Domain"))
-        self.pack_start(frame, expand=False, fill=False)
-        self.table_combo = gtk.combo_box_new_text()
+        frame = Gtk.Frame(_("Search Domain"))
+        self.pack_start(frame, False, False, 0)
+        self.table_combo = Gtk.combo_box_new_text()
         frame.add(self.table_combo)
         for key in sorted(self.domain_map.keys()):
             self.table_combo.append_text(key)
 
         self.table_combo.connect('changed', self.on_table_combo_changed)
 
-        self.prop_tree = gtk.TreeView()
+        self.prop_tree = Gtk.TreeView()
         self.prop_tree.set_headers_visible(False)
-        cell = gtk.CellRendererText()
-        column = gtk.TreeViewColumn(_("Property"), cell)
+        cell = Gtk.CellRendererText()
+        column = Gtk.TreeViewColumn(_("Property"), cell)
         self.prop_tree.append_column(column)
         column.add_attribute(cell, 'text', 0)
 
         self.prop_tree.connect('test_expand_row', self.on_row_expanded)
 
-        frame = gtk.Frame(_('Domain Properties'))
-        sw = gtk.ScrolledWindow()
+        frame = Gtk.Frame(_('Domain Properties'))
+        sw = Gtk.ScrolledWindow()
         sw.add(self.prop_tree)
         frame.add(sw)
-        self.pack_start(frame, expand=True, fill=True)
+        self.pack_start(frame, True, True, 0)
 
     def _insert_props(self, mapper, model, treeiter):
         """
@@ -614,13 +615,13 @@ class SchemaBrowser(gtk.VBox):
         it = combo.get_active_iter()
         domain = combo.props.model[it][0]
         mapper = class_mapper(self.domain_map[domain])
-        model = gtk.TreeStore(str, object)
+        model = Gtk.TreeStore(str, object)
         root = model.get_iter_root()
         self._insert_props(mapper, model, root)
         self.prop_tree.props.model = model
 
 
-class SchemaMenu(gtk.Menu):
+class SchemaMenu(Gtk.Menu):
     """
     SchemaMenu
 
@@ -675,7 +676,7 @@ class SchemaMenu(gtk.Menu):
         for prop in column_properties:
             if not self.relation_filter(prop):
                 continue
-            item = gtk.MenuItem(prop.key, use_underline=False)
+            item = Gtk.MenuItem(prop.key, use_underline=False)
             item.connect('activate', self.on_activate, prop)
             items.append(item)
 
@@ -689,9 +690,9 @@ class SchemaMenu(gtk.Menu):
         for prop in relation_properties:
             if not self.relation_filter(prop):
                 continue
-            item = gtk.MenuItem(prop.key, use_underline=False)
+            item = Gtk.MenuItem(prop.key, use_underline=False)
             items.append(item)
-            submenu = gtk.Menu()
+            submenu = Gtk.Menu()
             item.set_submenu(submenu)
             item.connect('select', self.on_select, prop)
         return items
@@ -712,14 +713,14 @@ class ExpressionRow(object):
 
         self.and_or_combo = None
         if row_number != 1:
-            self.and_or_combo = gtk.combo_box_new_text()
+            self.and_or_combo = Gtk.combo_box_new_text()
             self.and_or_combo.append_text("and")
             self.and_or_combo.append_text("or")
             self.and_or_combo.set_active(0)
             self.table.attach(self.and_or_combo, 0, 1,
                               row_number, row_number + 1)
 
-        self.prop_button = gtk.Button(_('Choose a property...'))
+        self.prop_button = Gtk.Button(_('Choose a property...'))
         self.prop_button.props.use_underline = False
 
         def on_prop_button_clicked(button, event, menu):
@@ -732,7 +733,7 @@ class ExpressionRow(object):
                                  self.schema_menu)
         self.table.attach(self.prop_button, 1, 2, row_number, row_number+1)
 
-        self.cond_combo = gtk.combo_box_new_text()
+        self.cond_combo = Gtk.combo_box_new_text()
         conditions = ['=', '!=', '<', '<=', '>', '>=', 'is', 'is not', 'like',
                       'ilike']
         map(self.cond_combo.append_text, conditions)
@@ -742,14 +743,14 @@ class ExpressionRow(object):
         # by default we start with an entry but value_widget can
         # change depending on the type of the property chosen in the
         # schema menu, see self.on_schema_menu_activated
-        self.value_widget = gtk.Entry()
+        self.value_widget = Gtk.Entry()
         self.value_widget.connect('changed', self.on_value_changed)
         self.table.attach(self.value_widget, 3, 4, row_number, row_number+1)
 
         if row_number != 1:
-            image = gtk.image_new_from_stock(gtk.STOCK_REMOVE,
-                                             gtk.ICON_SIZE_BUTTON)
-            self.remove_button = gtk.Button()
+            image = Gtk.image_new_from_stock(Gtk.STOCK_REMOVE,
+                                             Gtk.ICON_SIZE_BUTTON)
+            self.remove_button = Gtk.Button()
             self.remove_button.props.image = image
             self.remove_button.connect('clicked',
                                        lambda b: remove_callback(self))
@@ -759,7 +760,7 @@ class ExpressionRow(object):
     def on_value_changed(self, widget, *args):
         """
         Call the QueryBuilder.validate() for this row.
-        Set the sensitivity of the gtk.RESPONSE_OK button on the QueryBuilder.
+        Set the sensitivity of the Gtk.ResponseType.OK button on the QueryBuilder.
         """
         self.dialog.validate()
 
@@ -778,11 +779,11 @@ class ExpressionRow(object):
 
         # change the widget depending on the type of the selected property
         if isinstance(prop.columns[0].type, bauble.btypes.Enum):
-            self.value_widget = gtk.ComboBox()
-            cell = gtk.CellRendererText()
-            self.value_widget.pack_start(cell, True)
+            self.value_widget = Gtk.ComboBox()
+            cell = Gtk.CellRendererText()
+            self.value_widget.pack_start(cell, True, True, 0)
             self.value_widget.add_attribute(cell, 'text', 1)
-            model = gtk.ListStore(str, str)
+            model = Gtk.ListStore(str, str)
             if prop.columns[0].type.translations:
                 trans = prop.columns[0].type.translations
                 prop_values = [(k, trans[k]) for k in sorted(trans.keys())]
@@ -793,8 +794,8 @@ class ExpressionRow(object):
                 model.append([value, translation])
             self.value_widget.props.model = model
             self.value_widget.connect('changed', self.on_value_changed)
-        elif not isinstance(self.value_widget, gtk.Entry):
-            self.value_widget = gtk.Entry()
+        elif not isinstance(self.value_widget, Gtk.Entry):
+            self.value_widget = Gtk.Entry()
             self.value_widget.connect('changed', self.on_value_changed)
 
         self.table.attach(self.value_widget, left, right, top, bottom)
@@ -827,13 +828,13 @@ class ExpressionRow(object):
             return None
 
         value = ''
-        if isinstance(self.value_widget, gtk.ComboBox):
+        if isinstance(self.value_widget, Gtk.ComboBox):
             model = self.value_widget.props.model
             active_iter = self.value_widget.get_active_iter()
             if active_iter:
                 value = model[active_iter][0]
         else:
-            # assume its a gtk.Entry or other widget with a text property
+            # assume its a Gtk.Entry or other widget with a text property
             value = self.value_widget.props.text.strip()
         and_or = ''
         if self.and_or_combo:
@@ -843,22 +844,22 @@ class ExpressionRow(object):
                          '"%s"' % value]).strip()
 
 
-class QueryBuilder(gtk.Dialog):
+class QueryBuilder(Gtk.Dialog):
 
     def __init__(self, parent=None):
         """
         """
         super(QueryBuilder, self).\
             __init__(title=_("Query Builder"), parent=parent,
-                     flags=gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
-                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                              gtk.STOCK_OK, gtk.RESPONSE_OK))
+                     flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+                     buttons=(Gtk.STOCK_CANCEL, Gtk.RESPONSE_CANCEL,
+                              Gtk.STOCK_OK, Gtk.ResponseType.OK))
 
         self.vbox.props.spacing = 15
         self.expression_rows = []
         self.mapper = None
         self._first_choice = True
-        self.set_response_sensitive(gtk.RESPONSE_OK, False)
+        self.set_response_sensitive(Gtk.ResponseType.OK, False)
 
     def on_domain_combo_changed(self, *args):
         """
@@ -885,9 +886,9 @@ class QueryBuilder(gtk.Dialog):
         for row in self.expression_rows:
             sensitive = False
             value = None
-            if isinstance(row.value_widget, gtk.Entry):
+            if isinstance(row.value_widget, Gtk.Entry):
                 value = row.value_widget.props.text
-            elif isinstance(row.value_widget, gtk.ComboBox):
+            elif isinstance(row.value_widget, Gtk.ComboBox):
                 value = row.value_widget.get_active() >= 0
 
             if value and row.menu_item_activated:
@@ -896,7 +897,7 @@ class QueryBuilder(gtk.Dialog):
                 valid = False
                 break
 
-        self.set_response_sensitive(gtk.RESPONSE_OK, valid)
+        self.set_response_sensitive(Gtk.ResponseType.OK, valid)
         return valid
 
     def remove_expression_row(self, row):
@@ -915,16 +916,16 @@ class QueryBuilder(gtk.Dialog):
         domain = self.domain_map[self.domain_combo.get_active_text()]
         self.mapper = class_mapper(domain)
         row = ExpressionRow(self, self.remove_expression_row)
-        self.set_response_sensitive(gtk.RESPONSE_OK, False)
+        self.set_response_sensitive(Gtk.ResponseType.OK, False)
         self.expression_rows.append(row)
         self.expressions_table.show_all()
 
     def start(self):
         self.domain_map = MapperSearch.get_domain_classes().copy()
 
-        frame = gtk.Frame(_("Search Domain"))
-        self.vbox.pack_start(frame, expand=False, fill=False)
-        self.domain_combo = gtk.combo_box_new_text()
+        frame = Gtk.Frame(_("Search Domain"))
+        self.vbox.pack_start(frame, False, False, 0)
+        self.domain_combo = Gtk.combo_box_new_text()
         frame.add(self.domain_combo)
         for key in sorted(self.domain_map.keys()):
             self.domain_combo.append_text(key)
@@ -933,19 +934,19 @@ class QueryBuilder(gtk.Dialog):
 
         self.domain_combo.connect('changed', self.on_domain_combo_changed)
 
-        frame = gtk.Frame(_("Expressions"))
-        self.expressions_table = gtk.Table()
+        frame = Gtk.Frame(_("Expressions"))
+        self.expressions_table = Gtk.Table()
         self.expressions_table.props.column_spacing = 10
         frame.add(self.expressions_table)
-        self.vbox.pack_start(frame, expand=False, fill=False)
+        self.vbox.pack_start(frame, False, False, 0)
 
         # add button to add additional expression rows
-        self.add_button = gtk.Button()
+        self.add_button = Gtk.Button()
         self.add_button.props.sensitive = False
-        img = gtk.image_new_from_stock(gtk.STOCK_ADD, gtk.ICON_SIZE_BUTTON)
+        img = Gtk.image_new_from_stock(Gtk.STOCK_ADD, Gtk.ICON_SIZE_BUTTON)
         self.add_button.props.image = img
         self.add_button.connect("clicked", lambda w: self.add_expression_row())
-        align = gtk.Alignment(0, 0, 0, 0)
+        align = Gtk.Alignment(0, 0, 0, 0)
         align.add(self.add_button)
         self.vbox.pack_end(align, fill=False, expand=False)
 

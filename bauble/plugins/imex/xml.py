@@ -4,11 +4,9 @@
 # Description: handle import and exporting from a simple XML format
 #
 import os
-import csv
 import traceback
 
-import gtk.gdk
-import gobject
+from gi.repository import Gtk
 from sqlalchemy import *
 
 import bauble
@@ -16,7 +14,6 @@ import bauble.db as db
 import bauble.utils as utils
 import bauble.pluginmgr as pluginmgr
 import bauble.task
-from bauble.utils import xml_safe
 from bauble.utils.log import info, debug
 
 # <tableset>
@@ -42,10 +39,9 @@ def ElementFactory(parent, name, **kwargs):
     try:
         if text is not None:
             el.text = unicode(text, 'utf8')
-    except (AssertionError, TypeError), e:
+    except (AssertionError, TypeError):
         el.text = unicode(str(text), 'utf8')
     return el
-
 
 
 class XMLExporter:
@@ -53,24 +49,23 @@ class XMLExporter:
     def __init__(self):
         pass
 
-
     def start(self, path=None):
+        d = Gtk.Dialog(
+            'Bauble - XML Exporter', bauble.gui.window,
+            Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            (Gtk.STOCK_CANCEL, Gtk.ResponseType.REJECT,
+             Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT))
 
-        d = gtk.Dialog('Bauble - XML Exporter', bauble.gui.window,
-                        gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
-                       (gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,
-                        gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+        box = Gtk.VBox(spacing=20)
+        d.vbox.pack_start(box, True, True, 10)
 
-        box = gtk.VBox(spacing=20)
-        d.vbox.pack_start(box, padding=10)
-
-        file_chooser = gtk.FileChooserButton(_('Select a directory'))
+        file_chooser = Gtk.FileChooserButton(_('Select a directory'))
         file_chooser.set_select_multiple(False)
-        file_chooser.set_action(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER)
-        box.pack_start(file_chooser)
-        check = gtk.CheckButton(_('Save all data in one file'))
+        file_chooser.set_action(Gtk.FileChooserAction.SELECT_FOLDER)
+        box.pack_start(file_chooser, True, True, 0)
+        check = Gtk.CheckButton(_('Save all data in one file'))
         check.set_active(True)
-        box.pack_start(check)
+        box.pack_start(check, True, True, 0)
 
         d.connect('response', self.on_dialog_response,
                   file_chooser.get_filename(), check.get_active())
@@ -78,13 +73,11 @@ class XMLExporter:
         d.run()
         d.hide()
 
-
     def on_dialog_response(self, dialog, response, filename, one_file):
         debug('on_dialog_response(%s, %s)' % (filename, one_file))
-        if response == gtk.RESPONSE_ACCEPT:
+        if response == Gtk.ResponseType.ACCEPT:
             self.__export_task(filename, one_file)
         dialog.destroy()
-
 
     def __export_task(self, path, one_file=True):
         ntables = len(db.metadata.tables)
@@ -109,7 +102,7 @@ class XMLExporter:
             except ValueError, e:
                 utils.message_details_dialog(utils.xml_safe_utf8(e),
                                              traceback.format_exc(),
-                                             gtk.MESSAGE_ERROR)
+                                             Gtk.MessageType.ERROR)
                 return
             else:
                 if one_file:
@@ -124,7 +117,6 @@ class XMLExporter:
             tree.write(filename, encoding='utf8', xml_declaration=True)
 
 
-
 class XMLExportCommandHandler(pluginmgr.CommandHandler):
 
     command = 'exxml'
@@ -137,7 +129,6 @@ class XMLExportCommandHandler(pluginmgr.CommandHandler):
         debug('started')
 
 
-
 class XMLExportTool(pluginmgr.Tool):
     category = _("Export")
     label = _("XML")
@@ -148,7 +139,6 @@ class XMLExportTool(pluginmgr.Tool):
         c.start()
 
 
-
 class XMLImexPlugin(pluginmgr.Plugin):
     tools = [XMLExportTool]
     commands = [XMLExportCommandHandler]
@@ -157,5 +147,5 @@ class XMLImexPlugin(pluginmgr.Plugin):
 try:
     import lxml.etree as etree
 except ImportError:
-    utils.message_dialog('The <i>lxml</i> package is required for the '\
+    utils.message_dialog('The <i>lxml</i> package is required for the '
                          'XML Import/Exporter plugin')

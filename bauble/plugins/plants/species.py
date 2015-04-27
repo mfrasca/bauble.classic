@@ -174,7 +174,7 @@ class VernacularExpander(InfoExpander):
         InfoExpander.__init__(self, _("Vernacular Names"), widgets)
         vernacular_box = self.widgets.sp_vernacular_box
         self.widgets.remove_parent(vernacular_box)
-        self.vbox.pack_start(vernacular_box)
+        self.vbox.pack_start(vernacular_box, True, True, 0)
 
 
     def update(self, row):
@@ -209,7 +209,7 @@ class SynonymsExpander(InfoExpander):
         InfoExpander.__init__(self, _("Synonyms"), widgets)
         synonyms_box = self.widgets.sp_synonyms_box
         self.widgets.remove_parent(synonyms_box)
-        self.vbox.pack_start(synonyms_box)
+        self.vbox.pack_start(synonyms_box, True, True, 0)
 
 
     def update(self, row):
@@ -237,7 +237,7 @@ class SynonymsExpander(InfoExpander):
                 label.set_markup(Species.str(syn, markup=True, authors=True))
                 box.add(label)
                 utils.make_label_clickable(label, on_label_clicked, syn)
-                syn_box.pack_start(box, expand=False, fill=False)
+                syn_box.pack_start(box, False, False, 0)
             self.show_all()
 
             self.set_sensitive(True)
@@ -258,7 +258,7 @@ class GeneralSpeciesExpander(InfoExpander):
         InfoExpander.__init__(self, _("General"), widgets)
         general_box = self.widgets.sp_general_box
         self.widgets.remove_parent(general_box)
-        self.vbox.pack_start(general_box)
+        self.vbox.pack_start(general_box, True, True, 0)
         self.widgets.sp_name_data.set_line_wrap(True)
 
         # make the check buttons read only
@@ -382,7 +382,7 @@ class LinksExpander(view.LinksExpander):
 
         for b in buttons:
             b.set_alignment(0, -1)
-            self.vbox.pack_start(b, expand=False, fill=False)
+            self.vbox.pack_start(b, False, False, 0)
 
 
     def update(self, row):

@@ -75,7 +75,6 @@ class ABCDTestCase(BaubleTestCase):
 
 #         self.assert_(self.validate(datasets), self.abcd_schema.error_log)
 
-
     def test_export(self):
         """
         Test the ABCDExporter

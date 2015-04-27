@@ -8,9 +8,9 @@ import os
 import sys
 import traceback
 
-
-import gtk
-import gobject
+from gi.repository import Gtk
+from gi.repository import Gdk
+from gi.repository import GObject
 
 import pango
 from bauble.i18n import _
@@ -37,7 +37,7 @@ else:
     _substr_tmpl = '<small>%s</small>'
 
 
-class Action(gtk.Action):
+class Action(Gtk.Action):
 
     """
     An Action allows a label, tooltip, callback and accelerator to be called
@@ -79,10 +79,10 @@ class Action(gtk.Action):
     enabled = property(_get_enabled, _set_enabled)
 
 
-class InfoExpander(gtk.Expander):
+class InfoExpander(Gtk.Expander):
     """
-    an abstract class that is really just a generic expander with a vbox
-    to extend this you just have to implement the update() method
+    an abstract class that is really just a generic expander with a vbox.
+    to extend this you just have to implement the update() method.
     """
 
     # preference for storing the expanded state
@@ -96,7 +96,7 @@ class InfoExpander(gtk.Expander):
         :param widgets: a bauble.utils.BuilderWidgets instance
         """
         super(InfoExpander, self).__init__(label)
-        self.vbox = gtk.VBox(False)
+        self.vbox = Gtk.VBox(False)
         self.vbox.set_border_width(5)
         self.add(self.vbox)
         self.widgets = widgets
@@ -127,49 +127,49 @@ class PropertiesExpander(InfoExpander):
 
     def __init__(self):
         super(PropertiesExpander, self).__init__(_('Properties'))
-        table = gtk.Table(rows=4, columns=2)
+        table = Gtk.Table(rows=4, columns=2)
         table.set_col_spacings(15)
         table.set_row_spacings(8)
 
         # database id
-        id_label = gtk.Label(_("<b>ID:</b>"))
+        id_label = Gtk.Label(_("<b>ID:</b>"))
         id_label.set_use_markup(True)
         id_label.set_alignment(1, .5)
-        self.id_data = gtk.Label('--')
+        self.id_data = Gtk.Label('--')
         self.id_data.set_alignment(0, .5)
         table.attach(id_label, 0, 1, 0, 1)
         table.attach(self.id_data, 1, 2, 0, 1)
 
         # object type
-        type_label = gtk.Label(_("<b>Type:</b>"))
+        type_label = Gtk.Label(_("<b>Type:</b>"))
         type_label.set_use_markup(True)
         type_label.set_alignment(1, .5)
-        self.type_data = gtk.Label('--')
+        self.type_data = Gtk.Label('--')
         self.type_data.set_alignment(0, .5)
         table.attach(type_label, 0, 1, 1, 2)
         table.attach(self.type_data, 1, 2, 1, 2)
 
         # date created
-        created_label = gtk.Label(_("<b>Date created:</b>"))
+        created_label = Gtk.Label(_("<b>Date created:</b>"))
         created_label.set_use_markup(True)
         created_label.set_alignment(1, .5)
-        self.created_data = gtk.Label('--')
+        self.created_data = Gtk.Label('--')
         self.created_data.set_alignment(0, .5)
         table.attach(created_label, 0, 1, 2, 3)
         table.attach(self.created_data, 1, 2, 2, 3)
 
         # date last updated
-        updated_label = gtk.Label(_("<b>Last updated:</b>"))
+        updated_label = Gtk.Label(_("<b>Last updated:</b>"))
         updated_label.set_use_markup(True)
         updated_label.set_alignment(1, .5)
-        self.updated_data = gtk.Label('--')
+        self.updated_data = Gtk.Label('--')
         self.updated_data.set_alignment(0, .5)
         table.attach(updated_label, 0, 1, 3, 4)
         table.attach(self.updated_data, 1, 2, 3, 4)
 
-        box = gtk.HBox()
-        box.pack_start(table, expand=False, fill=False)
-        self.vbox.pack_start(box, expand=False, fill=False)
+        box = Gtk.HBox()
+        box.pack_start(table, False, False, 0)
+        self.vbox.pack_start(box, False, False, 0)
 
     def update(self, row):
         """"
@@ -181,18 +181,18 @@ class PropertiesExpander(InfoExpander):
         self.updated_data.set_text(str(row._last_updated))
 
 
-class InfoBoxPage(gtk.ScrolledWindow):
+class InfoBoxPage(Gtk.ScrolledWindow):
     """
-    A :class:`gtk.ScrolledWindow` that contains
+    A :class:`Gtk.ScrolledWindow` that contains
     :class:`bauble.view.InfoExpander` objects.
     """
 
     def __init__(self):
         super(InfoBoxPage, self).__init__()
-        self.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-        self.vbox = gtk.VBox()
+        self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.vbox = Gtk.VBox()
         self.vbox.set_spacing(10)
-        viewport = gtk.Viewport()
+        viewport = Gtk.Viewport()
         viewport.add(self.vbox)
         self.add(viewport)
         self.expanders = {}
@@ -204,11 +204,11 @@ class InfoBoxPage(gtk.ScrolledWindow):
 
         :param expander: the bauble.view.InfoExpander to add to this infobox
         '''
-        self.vbox.pack_start(expander, expand=False, fill=True, padding=5)
+        self.vbox.pack_start(expander, False, True, 5)
         self.expanders[expander.get_property("label")] = expander
 
-        expander._sep = gtk.HSeparator()
-        self.vbox.pack_start(expander._sep, False, False)
+        expander._sep = Gtk.HSeparator()
+        self.vbox.pack_start(expander._sep, False, False, 0)
 
     def get_expander(self, label):
         """
@@ -240,10 +240,10 @@ class InfoBoxPage(gtk.ScrolledWindow):
           this is passed to each of the infoexpanders in turn
         """
         for expander in self.expanders.values():
-            expanders.update(row)
+            expander.update(row)
 
 
-class InfoBox(gtk.Notebook):
+class InfoBox(Gtk.Notebook):
     """
     Holds list of expanders with an optional tabbed layout.
 
@@ -306,8 +306,8 @@ class LinksExpander(InfoExpander):
         :param notes: the name of the notes property on the row
         """
         super(LinksExpander, self).__init__(_("Links"))
-        self.dynamic_box = gtk.VBox()
-        self.vbox.pack_start(self.dynamic_box)
+        self.dynamic_box = Gtk.VBox()
+        self.vbox.pack_start(self.dynamic_box, True, True, 0)
         self.notes = notes
 
     def update(self, row):
@@ -319,12 +319,12 @@ class LinksExpander(InfoExpander):
                 for label, url in utils.get_urls(note.note):
                     if not label:
                         label = url
-                    label = gtk.Label(label)
+                    label = Gtk.Label(label)
                     label.set_ellipsize(pango.ELLIPSIZE_END)
-                    button = gtk.LinkButton(uri=url)
+                    button = Gtk.LinkButton(uri=url)
                     button.add(label)
                     button.set_alignment(0, -1)
-                    self.dynamic_box.pack_start(button, expand=False, fill=False)
+                    self.dynamic_box.pack_start(button, False, False, 0)
             self.dynamic_box.show_all()
 
 
@@ -412,6 +412,7 @@ class SearchView(pluginmgr.View):
         self.context_menu_cache = {}
         self.infobox_cache = {}
         self.infobox = None
+        self.floatingbox = None
 
         # keep all the search results in the same session, this should
         # be cleared when we do a new search
@@ -438,7 +439,7 @@ class SearchView(pluginmgr.View):
         if len(row.notes) > 0:
             self.widgets.notes_expander.props.sensitive = True
             self.widgets.notes_expander.props.expanded = self._notes_expanded
-            model = gtk.ListStore(object)
+            model = Gtk.ListStore(object)
             for note in row.notes:
                 model.append([note])
             self.widgets.notes_treeview.set_model(model)
@@ -470,8 +471,9 @@ class SearchView(pluginmgr.View):
 
         :param row: the row to use to update the infobox
         '''
-        # remove the current infobox if there is one and stop
-#        debug('set_infobox_from_row: %s --  %s' % (row, repr(row)))
+
+        # if there's no object to show, just return, but first make sure we
+        # have removed any previous infobox beloning to us.
         if row is None:
             if self.infobox is not None and self.infobox.parent == self.pane:
                 self.pane.remove(self.infobox)
@@ -495,7 +497,7 @@ class SearchView(pluginmgr.View):
                 new_infobox = self.view_meta[selected_type].infobox()
             self.infobox_cache[selected_type] = new_infobox
 
-        # remove any old infoboxes connected to the pane
+        # remove any useless old infoboxes connected to the pane
         if self.infobox is not None and \
                 type(self.infobox) != type(new_infobox):
             if self.infobox.parent == self.pane:
@@ -507,6 +509,12 @@ class SearchView(pluginmgr.View):
             self.pane.pack2(self.infobox, resize=False, shrink=True)
             self.pane.show_all()
             self.infobox.update(row)
+
+    def update_floatingbox(self):
+        '''update floating box with first line in selection
+        '''
+        if self.floatingbox is not None:
+            self.floatingbox.update((self.get_selected_values() + [None])[0])
 
     def get_selected_values(self):
         '''
@@ -524,6 +532,7 @@ class SearchView(pluginmgr.View):
         '''
         self.update_infobox()
         self.update_notes()
+        self.update_floatingbox()
 
         for accel, cb in self.installed_accels:
             # disconnect previously installed accelerators by the key
@@ -546,7 +555,7 @@ class SearchView(pluginmgr.View):
             if not enabled:
                 continue
             # if enabled then connect the accelerator
-            keyval, mod = gtk.accelerator_parse(action.accelerator)
+            keyval, mod = Gtk.accelerator_parse(action.accelerator)
             if (keyval, mod) != (0, 0):
                 def cb(func):
                     def _impl(*args):
@@ -559,7 +568,7 @@ class SearchView(pluginmgr.View):
                             self.reset_view()
                     return _impl
                 self.accel_group.connect_group(keyval, mod,
-                                               gtk.ACCEL_VISIBLE,
+                                               Gtk.ACCEL_VISIBLE,
                                                cb(action.callback))
                 self.installed_accels.append(((keyval, mod), action.callback))
             else:
@@ -603,7 +612,7 @@ class SearchView(pluginmgr.View):
         sbcontext_id = statusbar.get_context_id('searchview.nresults')
         statusbar.pop(sbcontext_id)
         if len(results) == 0:
-            model = gtk.ListStore(str)
+            model = Gtk.ListStore(str)
             msg = bold % _('Couldn\'t find anything for search: "%s"') \
                 % text
             model.append([msg])
@@ -640,7 +649,7 @@ class SearchView(pluginmgr.View):
                 statusbar.push(sbcontext_id,
                                _("%s search results") % len(results))
                 self.results_view.set_cursor(0)
-                gobject.idle_add(lambda: self.results_view.scroll_to_cell(0))
+                GObject.idle_add(lambda: self.results_view.scroll_to_cell(0))
 
         self.update_notes()
 
@@ -659,7 +668,7 @@ class SearchView(pluginmgr.View):
         Look up the table type of the selected row and if it has
         any children then add them to the row
         '''
-        expand = False
+
         model = view.get_model()
         row = model.get_value(treeiter, 0)
         view.collapse_row(path)
@@ -697,9 +706,9 @@ class SearchView(pluginmgr.View):
         model. This method is usually called by self.populate_results()
         """
         nresults = len(results)
-        model = gtk.TreeStore(object)
+        model = Gtk.TreeStore(object)
         model.set_default_sort_func(lambda *args: -1)
-        model.set_sort_column_id(-1, gtk.SORT_ASCENDING)
+        model.set_sort_column_id(-1, Gtk.SORT_ASCENDING)
         utils.clear_model(self.results_view)
 
         groups = []
@@ -755,7 +764,7 @@ class SearchView(pluginmgr.View):
         append object to a parent iter in the model
 
         :param model: the model the append to
-        :param parent:  the parent gtk.TreeIter
+        :param parent:  the parent Gtk.TreeIter
         :param kids: a list of kids to append
         @return: the model with the kids appended
         """
@@ -816,7 +825,7 @@ class SearchView(pluginmgr.View):
                     for found in utils.search_tree_model(model, value):
                         model.remove(found)
                     self.results_view.set_model(model)
-                gobject.idle_add(remove)
+                GObject.idle_add(remove)
 
     def get_expanded_rows(self):
         '''
@@ -824,7 +833,7 @@ class SearchView(pluginmgr.View):
         '''
         expanded_rows = []
         expand = lambda view, path: \
-            expanded_rows.append(gtk.TreeRowReference(view.get_model(), path))
+            expanded_rows.append(Gtk.TreeRowReference(view.get_model(), path))
         self.results_view.map_expanded_rows(expand)
         # seems to work better if we passed the reversed rows to
         # self.expand_to_all_refs
@@ -836,7 +845,7 @@ class SearchView(pluginmgr.View):
         :param references: a list of TreeRowReferences to expand to
 
         Note: This method calls get_path() on each
-        gtk.TreeRowReference in <references> which apparently
+        Gtk.TreeRowReference in <references> which apparently
         invalidates the reference.
         '''
         for ref in references:
@@ -875,7 +884,7 @@ class SearchView(pluginmgr.View):
         try:
             menu = self.context_menu_cache[selected_type]
         except KeyError:
-            menu = gtk.Menu()
+            menu = Gtk.Menu()
             for action in self.view_meta[selected_type].actions:
                 #debug('path: %s' %  action.get_accel_path())
                 item = action.create_menu_item()
@@ -893,7 +902,7 @@ class SearchView(pluginmgr.View):
                     except Exception, e:
                         msg = utils.xml_safe_utf8(str(e))
                         tb = utils.xml_safe_utf8(traceback.format_exc())
-                        utils.message_details_dialog(msg, tb, gtk.MESSAGE_ERROR)
+                        utils.message_details_dialog(msg, tb, Gtk.MessageType.ERROR)
                         warning(traceback.format_exc())
                     if result:
                         self.reset_view()
@@ -921,7 +930,7 @@ class SearchView(pluginmgr.View):
         try:
             # try to get the reference to the selected object, if the
             # object has been deleted then we won't try to reselect it later
-            ref = gtk.TreeRowReference(model, paths[0])
+            ref = Gtk.TreeRowReference(model, paths[0])
         except:
             pass
 
@@ -965,14 +974,14 @@ class SearchView(pluginmgr.View):
         self.results_view.set_fixed_height_mode(True)
 
         selection = self.results_view.get_selection()
-        selection.set_mode(gtk.SELECTION_MULTIPLE)
+        selection.set_mode(Gtk.SELECTION_MULTIPLE)
         self.results_view.set_rubber_banding(True)
 
-        renderer = gtk.CellRendererText()
+        renderer = Gtk.CellRendererText()
         renderer.set_fixed_height_from_font(2)
         renderer.set_property('ellipsize', pango.ELLIPSIZE_END)
-        column = gtk.TreeViewColumn("Name", renderer)
-        column.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
+        column = Gtk.TreeViewColumn("Name", renderer)
+        column.set_sizing(Gtk.TREE_VIEW_COLUMN_FIXED)
         column.set_cell_data_func(renderer, self.cell_data_func)
         self.results_view.append_column(column)
 
@@ -990,7 +999,7 @@ class SearchView(pluginmgr.View):
             when clicking a mouse button.
             """
             if event.button == 3:
-                if (event.get_state() & gtk.gdk.CONTROL_MASK) == 0:
+                if (event.get_state() & Gdk.CONTROL_MASK) == 0:
                     path, _, _, _ = view.get_path_at_pos(int(event.x), int(event.y))
                     if not view.get_selection().path_is_selected(path):
                         return False
@@ -1004,9 +1013,9 @@ class SearchView(pluginmgr.View):
                                   self.on_view_row_activated)
 
         # this group doesn't need to be added to the main window with
-        # gtk.Window.add_accel_group since the group will be added
+        # Gtk.Window.add_accel_group since the group will be added
         # automatically when the view is set
-        self.accel_group = gtk.AccelGroup()
+        self.accel_group = Gtk.AccelGroup()
         self.installed_accels = []
 
         self.pane = self.widgets.search_hpane
@@ -1027,7 +1036,7 @@ class SearchView(pluginmgr.View):
 
         vbox = self.widgets.search_vbox
         self.widgets.remove_parent(vbox)
-        self.pack_start(vbox)
+        self.pack_start(vbox, True, True, 0)
 
     def on_notes_size_allocation(self, treeview, allocation, column, cell):
         """
@@ -1082,16 +1091,16 @@ class SearchView(pluginmgr.View):
                           note_col, note_cell)
 
 
-class StringColumn(gtk.TreeViewColumn):
+class StringColumn(Gtk.TreeViewColumn):
 
     """
-    A generic StringColumn for use in a gtk.TreeView.
+    A generic StringColumn for use in a Gtk.TreeView.
 
     This code partially based on the StringColumn from the Quidgets
     project (http://launchpad.net/quidgets)
     """
     def __init__(self, title, format_func=None, **kwargs):
-        self.renderer = gtk.CellRendererText()
+        self.renderer = Gtk.CellRendererText()
         super(StringColumn, self).__init__(title, self.renderer, **kwargs)
         self.renderer.set_property('ellipsize', pango.ELLIPSIZE_END)
         if format_func:
@@ -1111,7 +1120,7 @@ class HistoryView(pluginmgr.View):
         self.init_gui()
 
     def init_gui(self):
-        self.treeview = gtk.TreeView()
+        self.treeview = Gtk.TreeView()
         #self.treeview.set_fixed_height_mode(True)
         columns = [(_('Timestamp'), 0), (_('Operation'), 1),
                    (_('User'), 2), (_('Table'), 3), (_('Values'), 4)]
@@ -1119,13 +1128,13 @@ class HistoryView(pluginmgr.View):
             column = StringColumn(name, text=index)
             column.set_sort_column_id(index)
             column.set_expand(False)
-            column.props.sizing = gtk.TREE_VIEW_COLUMN_AUTOSIZE
+            column.props.sizing = Gtk.TREE_VIEW_COLUMN_AUTOSIZE
             column.set_resizable(True)
             column.renderer.set_fixed_height_from_font(1)
             self.treeview.append_column(column)
-        sw = gtk.ScrolledWindow()
+        sw = Gtk.ScrolledWindow()
         sw.add(self.treeview)
-        self.pack_start(sw)
+        self.pack_start(sw, True, True, 0)
 
     def populate_history(self, arg):
         """
@@ -1133,7 +1142,7 @@ class HistoryView(pluginmgr.View):
         """
         session = db.Session()
         utils.clear_model(self.treeview)
-        model = gtk.ListStore(str, str, str, str, str)
+        model = Gtk.ListStore(str, str, str, str, str)
         for item in session.query(db.History).\
                 order_by(db.History.timestamp.desc()).all():
             model.append([item.timestamp, item.operation, item.user,
@@ -1165,7 +1174,7 @@ pluginmgr.register_command(HistoryCommandHandler)
 def select_in_search_results(obj):
     """
     :param obj: the object the select
-    @returns: a gtk.TreeIter to the selected row
+    @returns: a Gtk.TreeIter to the selected row
 
     Search the tree model for obj if it exists then select it if not
     then add it and select it.

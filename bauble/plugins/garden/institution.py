@@ -24,7 +24,7 @@
 
 import os
 
-import gtk
+from gi.repository import Gtk
 
 import bauble.editor as editor
 import bauble.meta as meta
@@ -157,7 +157,7 @@ class InstitutionEditor(object):
 
     def start(self):
         response = self.presenter.start()
-        if response == gtk.RESPONSE_OK:
+        if response == Gtk.ResponseType.OK:
             self.model.write()
 
 

@@ -29,7 +29,8 @@ import os
 import copy
 import traceback
 
-import gtk
+from gi.repository import Gtk
+from gi.repository import Gdk
 
 from bauble.i18n import _
 import bauble.utils as utils
@@ -130,7 +131,7 @@ class ConnectionManager:
         uri = None
         while name is None or self._error:
             response = self.dialog.run()
-            if response == gtk.RESPONSE_OK:
+            if response == Gtk.ResponseType.OK:
                 name = self._get_connection_name()
                 uri = self._get_connection_uri()
                 if name is None:
@@ -163,7 +164,7 @@ class ConnectionManager:
         The dialog's response signal handler.
         """
         self._error = False
-        if response == gtk.RESPONSE_OK:
+        if response == Gtk.ResponseType.OK:
             settings = self.params_box.get_prefs()
             dbtype = self.widgets.type_combo.get_active_text()
             if dbtype == 'SQLite':
@@ -174,28 +175,28 @@ class ConnectionManager:
                         self._error = True
                         msg = _("Bauble does not have permission to "
                                 "read the directory:\n\n%s") % path
-                        utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+                        utils.message_dialog(msg, Gtk.MessageType.ERROR)
                     elif not os.access(path, os.W_OK):
                         self._error = True
                         msg = _("Bauble does not have permission to "
                                 "write to the directory:\n\n%s") % path
-                        utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+                        utils.message_dialog(msg, Gtk.MessageType.ERROR)
                 elif not os.access(filename, os.R_OK):
                     self._error = True
                     msg = _("Bauble does not have permission to read the "
                             "database file:\n\n%s") % filename
-                    utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+                    utils.message_dialog(msg, Gtk.MessageType.ERROR)
                 elif not os.access(filename, os.W_OK):
                     self._error = True
                     msg = _("Bauble does not have permission to "
                             "write to the database file:\n\n%s") % filename
-                    utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+                    utils.message_dialog(msg, Gtk.MessageType.ERROR)
             if not self._error:
                 self.save_current_to_prefs()
                 prefs.prefs[prefs.picture_root_pref] = settings.get(
                     'pictures', '')
-        elif response == gtk.RESPONSE_CANCEL or \
-                response == gtk.RESPONSE_DELETE_EVENT:
+        elif response == Gtk.ResponseType.CANCEL or \
+                response == Gtk.ResponseType.DELETE_EVENT:
             if not self.compare_prefs_to_saved(self.current_name):
                 msg = _("Do you want to save your changes?")
                 if utils.yes_no_dialog(msg):
@@ -218,15 +219,16 @@ class ConnectionManager:
             msg = _("No Python database connectors installed.\n"
                     "Please consult the documentation for the "
                     "prerequesites for installing Bauble.")
-            utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+            utils.message_dialog(msg, Gtk.MessageType.ERROR)
             raise Exception(msg)
 
         glade_path = os.path.join(paths.lib_dir(), "connmgr.glade")
         self.widgets = utils.BuilderWidgets(glade_path)
 
         self.dialog = self.widgets.main_dialog
+        from gi.repository import GdkPixbuf
         try:
-            pixbuf = gtk.gdk.pixbuf_new_from_file(bauble.default_icon)
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file(bauble.default_icon)
             self.dialog.set_icon(pixbuf)
         except Exception:
             warning(_('Could not load icon from %s' % bauble.default_icon))
@@ -234,12 +236,12 @@ class ConnectionManager:
             # utils.message_details_dialog(_('Could not load icon from %s' % \
             #                              bauble.default_icon),
             #                              traceback.format_exc(),
-            #                              gtk.MESSAGE_ERROR)
+            #                              Gtk.MessageType.ERROR)
 
         if bauble.gui is not None and bauble.gui.window is not None:
             self.dialog.set_transient_for(bauble.gui.window)
             if not bauble.gui.window.get_property('visible'):
-                self.dialog.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_DIALOG)
+                self.dialog.set_type_hint(Gdk.WINDOW_TYPE_HINT_DIALOG)
                 self.dialog.set_property('skip-taskbar-hint', False)
 
         self.widgets.add_button.connect('clicked', self.on_add_button_clicked)
@@ -332,15 +334,15 @@ class ConnectionManager:
         self.name_combo.set_active(0)
 
     def on_add_button_clicked(self, button, data=None):
-        d = gtk.Dialog(_("Enter a connection name"), self.dialog,
-                       gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
-                       (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
-        d.set_default_response(gtk.RESPONSE_ACCEPT)
+        d = Gtk.Dialog(_("Enter a connection name"), self.dialog,
+                       Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+                       (Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT))
+        d.set_default_response(Gtk.ResponseType.ACCEPT)
         d.set_default_size(250, -1)
-        entry = gtk.Entry()
+        entry = Gtk.Entry()
         entry.connect("activate",
-                      lambda entry: d.response(gtk.RESPONSE_ACCEPT))
-        d.vbox.pack_start(entry)
+                      lambda entry: d.response(Gtk.ResponseType.ACCEPT))
+        d.vbox.pack_start(entry, True, True, 0)
         d.show_all()
         d.run()
         name = entry.get_text()
@@ -460,7 +462,7 @@ class ConnectionManager:
             elif len(self.old_params.keys()) != 0:
                 self.params_box.refresh_view(self.old_params)
 
-        self.expander_box.pack_start(self.params_box, False, False)
+        self.expander_box.pack_start(self.params_box, False, False, 0)
         self.dialog.show_all()
 
     def get_passwd(self, title=_("Enter your password"), before_main=False):
@@ -469,18 +471,19 @@ class ConnectionManager:
         """
         # TODO: if self.dialog is None then ask from the command line
         # or just set dialog parent to None
-        d = gtk.Dialog(title, self.dialog,
-                       gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
-                       (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
-        d.set_gravity(gtk.gdk.GRAVITY_CENTER)
-        d.set_position(gtk.WIN_POS_CENTER)
-        d.set_default_response(gtk.RESPONSE_ACCEPT)
+        d = Gtk.Dialog(title, self.dialog,
+                       Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+                       (Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT))
+        from gi.repository import Gdk
+        d.set_gravity(Gdk.GRAVITY_CENTER)
+        d.set_position(Gtk.WIN_POS_CENTER)
+        d.set_default_response(Gtk.ResponseType.ACCEPT)
         d.set_default_size(250, -1)
-        entry = gtk.Entry()
+        entry = Gtk.Entry()
         entry.set_visibility(False)
         entry.connect("activate",
-                      lambda entry: d.response(gtk.RESPONSE_ACCEPT))
-        d.vbox.pack_start(entry)
+                      lambda entry: d.response(Gtk.ResponseType.ACCEPT))
+        d.vbox.pack_start(entry, True, True, 0)
         d.show_all()
         d.run()
         passwd = entry.get_text()
@@ -544,7 +547,7 @@ class ConnectionManager:
             return False, _("Please choose a user name for this connection")
 
 
-class CMParamsBox(gtk.Table):
+class CMParamsBox(Gtk.Table):
     '''common parameters box, has placeholders for database url parts.
 
     dialect+driver://username:password@host:port/database
@@ -561,7 +564,7 @@ class CMParamsBox(gtk.Table):
         return [('passwd', self.passwd_check)]
 
     def __init__(self, conn_mgr, rows=5, columns=2):
-        gtk.Table.__init__(self, rows, columns)
+        Gtk.Table.__init__(self, rows, columns)
         self.set_row_spacings(10)
         self.create_gui()
 
@@ -573,29 +576,29 @@ class CMParamsBox(gtk.Table):
 
     def create_gui(self):
         label_alignment = (0.0, 0.5)
-        label = gtk.Label(_("Database: "))
+        label = Gtk.Label(_("Database: "))
         label.set_alignment(*label_alignment)
         self.attach(label, 0, 1, 0, 1)
-        self.db_entry = gtk.Entry()
+        self.db_entry = Gtk.Entry()
         self.attach(self.db_entry, 1, 2, 0, 1)
 
-        label = gtk.Label(_("Host: "))
+        label = Gtk.Label(_("Host: "))
         label.set_alignment(*label_alignment)
         self.attach(label, 0, 1, 1, 2)
-        self.host_entry = gtk.Entry()
+        self.host_entry = Gtk.Entry()
         self.host_entry.set_text("localhost")
         self.attach(self.host_entry, 1, 2, 1, 2)
 
-        label = gtk.Label(_("User: "))
+        label = Gtk.Label(_("User: "))
         label.set_alignment(*label_alignment)
         self.attach(label, 0, 1, 2, 3)
-        self.user_entry = gtk.Entry()
+        self.user_entry = Gtk.Entry()
         self.attach(self.user_entry, 1, 2, 2, 3)
 
-        label = gtk.Label(_("Password: "))
+        label = Gtk.Label(_("Password: "))
         label.set_alignment(*label_alignment)
         self.attach(label, 0, 1, 3, 4)
-        self.passwd_check = gtk.CheckButton()
+        self.passwd_check = Gtk.CheckButton()
         self.attach(self.passwd_check, 1, 2, 3, 4)
 
     def get_prefs(self):
@@ -644,41 +647,43 @@ class SQLiteParamsBox(CMParamsBox):
                 ]
 
     def create_gui(self):
-        self.default_check = gtk.CheckButton(_('Use default filename'))
+        self.default_check = Gtk.CheckButton(_('Use default filename'))
         self.attach(self.default_check, 0, 2, 0, 1)
         self.default_check.connect(
             'toggled', lambda button:
             self.file_box.set_sensitive(not button.get_active()))
 
         label_alignment = (0.0, 0.5)
-        label = gtk.Label(_("Filename: "))
+        label = Gtk.Label(_("Filename: "))
         label.set_alignment(*label_alignment)
         self.attach(label, 0, 1, 1, 2)
-        self.file_box = gtk.HBox(False)
-        self.file_entry = gtk.Entry()
-        self.file_box.pack_start(self.file_entry)
-        file_button = gtk.Button(_("Browse..."))
+        self.file_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
+                                homogeneous=False)
+        self.file_entry = Gtk.Entry()
+        self.file_box.pack_start(self.file_entry, True, True, 0)
+        file_button = Gtk.Button(_("Browse..."))
         file_button.connect("clicked", self.on_activate_browse_button)
         ## set additional properties, used in on_activate_browse_button
-        file_button.action = gtk.FILE_CHOOSER_ACTION_SAVE
+        file_button.action = Gtk.FileChooserAction.SAVE
         file_button.file_entry = self.file_entry
-        self.file_box.pack_start(file_button)
+        self.file_box.pack_start(file_button, True, True, 0)
         self.attach(self.file_box, 1, 2, 1, 2)
 
         label_alignment = (0.0, 0.5)
-        label = gtk.Label(_("Pictures root: "))
+        label = Gtk.Label(_("Pictures root: "))
         label.set_alignment(*label_alignment)
         self.attach(label, 0, 1, 2, 3)
-        self.pictureroot_box = gtk.HBox(False)
-        self.pictureroot_entry = gtk.Entry()
-        self.pictureroot_box.pack_start(self.pictureroot_entry)
-        pictureroot_button = gtk.Button(_("Browse..."))
+        self.pictureroot_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
+                                       homogeneous=False)
+        self.pictureroot_entry = Gtk.Entry()
+        self.pictureroot_box.pack_start(self.pictureroot_entry, True, True, 0)
+        pictureroot_button = Gtk.Button(_("Browse..."))
         pictureroot_button.connect("clicked", self.on_activate_browse_button)
         ## set additional properties, used in on_activate_browse_button
-        pictureroot_button.action = gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER
+        pictureroot_button.action = Gtk.FileChooserAction.SELECT_FOLDER
         pictureroot_button.file_entry = self.pictureroot_entry
         pictureroot_button.wants_filetype = None
-        self.pictureroot_box.pack_start(pictureroot_button)
+        self.pictureroot_box.pack_start(pictureroot_button, True, True, 0)
         self.attach(self.pictureroot_box, 1, 2, 2, 3)
 
     def get_prefs(self):
@@ -711,11 +716,11 @@ class SQLiteParamsBox(CMParamsBox):
             #debug(traceback.format_exc())
 
     def on_activate_browse_button(self, widget, data=None):
-        d = gtk.FileChooserDialog(
+        d = Gtk.FileChooserDialog(
             _("Choose a file..."), None,
             action=widget.action,
-            buttons=(gtk.STOCK_OK, gtk.RESPONSE_ACCEPT,
-                     gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL))
+            buttons=(Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT,
+                     Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL))
         d.run()
         filename = d.get_filename()
         if filename:

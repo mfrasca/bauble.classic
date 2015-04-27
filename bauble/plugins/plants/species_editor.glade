@@ -237,7 +237,7 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkComboBox" id="sp_spqual_combo">
+                              <object class="GtkComboBoxText" id="sp_spqual_combo">
                                 <property name="visible">True</property>
                               </object>
                               <packing>
@@ -502,7 +502,7 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkComboBoxEntry" id="sp_habit_comboentry">
+                          <object class="GtkEntry" id="sp_habit_comboentry">
                             <property name="visible">True</property>
                           </object>
                           <packing>

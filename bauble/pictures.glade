@@ -343,7 +343,7 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkComboBoxEntry" id="category_comboentry">
+                          <object class="GtkEntry" id="category_comboentry">
                             <property name="visible">True</property>
                             <property name="sensitive">False</property>
                             <property name="can_focus">False</property>

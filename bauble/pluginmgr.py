@@ -21,7 +21,7 @@ import re
 import sys
 import traceback
 
-import gtk
+from gi.repository import Gtk
 
 from bauble.i18n import _
 from sqlalchemy import Column, Unicode, select
@@ -112,7 +112,7 @@ def load(path=None):
         utils.message_details_dialog('Could not load plugin: '
                                      '\n\n<i>%s</i>\n\n%s'
                                      % (name, exc_str),
-                                     tb_str, type=gtk.MESSAGE_ERROR)
+                                     tb_str, type=Gtk.MessageType.ERROR)
 
     if len(found) == 0:
         debug('No plugins found at path: %s' % path)
@@ -176,7 +176,7 @@ def init(force=False):
             msg = _('The following plugins are in the registry but '
                     'could not be loaded:\n\n%(plugins)s' %
                     {'plugins': utils.utf8(', '.join(sorted(not_registered)))})
-            utils.message_dialog(utils.xml_safe(msg), type=gtk.MESSAGE_WARNING)
+            utils.message_dialog(utils.xml_safe(msg), type=Gtk.MessageType.WARNING)
 
     except Exception, e:
         raise
@@ -217,7 +217,7 @@ def init(force=False):
                                            "%(entry_name)s\n\n"
                                            "%(exception)s." % values),
                                          traceback.format_exc(),
-                                         gtk.MESSAGE_ERROR)
+                                         Gtk.MessageType.ERROR)
 
     # register the plugin commands seperately from the plugin initialization
     for plugin in ordered:
@@ -229,7 +229,7 @@ def init(force=False):
             except Exception, e:
                 msg = 'Error: Could not register command handler.\n\n%s' % \
                       utils.xml_safe(str(e))
-                utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+                utils.message_dialog(msg, Gtk.MessageType.ERROR)
 
     # don't build the tools menu if we're running from the tests and
     # we don't have a gui
@@ -426,7 +426,7 @@ class Tool(object):
         pass
 
 
-class View(gtk.VBox):
+class View(Gtk.VBox):
 
     def __init__(self, *args, **kwargs):
         """

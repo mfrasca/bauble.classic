@@ -19,7 +19,7 @@
 # along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import gtk
+from gi.repository import Gtk
 
 import bauble
 from bauble.i18n import _
@@ -213,7 +213,7 @@ class _prefs(dict):
                     % self._filename)
             if bauble.gui is not None and bauble.gui.window is not None:
                 import bauble.utils as utils
-                utils.message_dialog(msg, type=gtk.MESSAGE_ERROR,
+                utils.message_dialog(msg, type=Gtk.MessageType.ERROR,
                                      parent=bauble.gui.window)
 
 
@@ -239,8 +239,8 @@ class PrefsView(pluginmgr.View):
         pass
 
     def create_gui(self):
-        pane = gtk.VPaned()
-        self.pack_start(pane)
+        pane = Gtk.VPaned()
+        self.pack_start(pane, True, True, 0)
         pane.set_border_width(5)
         width, height = pane.size_request()
 
@@ -262,44 +262,44 @@ class PrefsView(pluginmgr.View):
             rect = bauble.gui.window.get_allocation()
             pane.set_position(int(rect.height/2))
 
-        label = gtk.Label()
+        label = Gtk.Label()
         label.set_markup(_('<b>Preferences</b>'))
         label.set_padding(5, 0)
-        frame = gtk.Frame()
+        frame = Gtk.Frame()
         frame.set_label_widget(label)
         view = self.create_prefs_view()
         frame.add(view)
         pane.pack1(frame)
 
-        label = gtk.Label()
+        label = Gtk.Label()
         label.set_markup(_('<b>Plugins</b>'))
         label.set_padding(5, 0)
-        frame = gtk.Frame()
+        frame = Gtk.Frame()
         frame.set_label_widget(label)
         view = self.create_registry_view()
         frame.add(view)
         pane.pack2(frame)
 
     def create_tree(self, columns, itemsiter):
-        treeview = gtk.TreeView()
+        treeview = Gtk.TreeView()
         treeview.set_rules_hint(True)
 
         i = 0
         model_cols = []
         for c in columns:
-            renderer = gtk.CellRendererText()
-            column = gtk.TreeViewColumn(c, renderer, text=i)
+            renderer = Gtk.CellRendererText()
+            column = Gtk.TreeViewColumn(c, renderer, text=i)
             treeview.append_column(column)
             i += 1
             model_cols.append(str)
 
-        model = gtk.ListStore(*model_cols)
+        model = Gtk.ListStore(*model_cols)
         for item in itemsiter:
             model.append(item)
         treeview.set_model(model)
 
-        sw = gtk.ScrolledWindow()
-        sw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         sw.add(treeview)
         return sw
 

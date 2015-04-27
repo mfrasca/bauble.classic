@@ -24,7 +24,7 @@ except ImportError:
     raise
 
 
-import gtk
+from gi.repository import Gtk
 
 import sqlalchemy.orm as orm
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
@@ -332,14 +332,14 @@ def verify_connection(engine, show_error_dialogs=False):
             return verify_connection(engine, False)
         except error.EmptyDatabaseError:
             msg = _('The database you have connected to is empty.')
-            utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+            utils.message_dialog(msg, Gtk.MessageType.ERROR)
             raise
         except error.MetaTableError:
             msg = _('The database you have connected to does not have the '
                     'bauble meta table.  This usually means that the database '
                     'is either corrupt or it was created with an old version '
                     'of Bauble')
-            utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+            utils.message_dialog(msg, Gtk.MessageType.ERROR)
             raise
         except error.TimestampError:
             msg = _('The database you have connected to does not have a '
@@ -347,7 +347,7 @@ def verify_connection(engine, show_error_dialogs=False):
                     'that there was a problem when you created the '
                     'database or the database you connected to wasn\'t '
                     'created with Bauble.')
-            utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+            utils.message_dialog(msg, Gtk.MessageType.ERROR)
             raise
         except error.VersionError, e:
             msg = (_('You are using Bauble version %(version)s while the '
@@ -357,7 +357,7 @@ def verify_connection(engine, show_error_dialogs=False):
                      'corrupted.') %
                    {'version': bauble.version,
                     'db_version': '%s' % e.version})
-            utils.message_dialog(msg, gtk.MESSAGE_ERROR)
+            utils.message_dialog(msg, Gtk.MessageType.ERROR)
             raise
 
     # check if the database has any tables

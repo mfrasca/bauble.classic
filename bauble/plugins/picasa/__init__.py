@@ -33,18 +33,27 @@ import tempfile
 import urllib
 from Queue import Queue
 
+from gi.repository import GObject
+
+from bauble.i18n import _
 import bauble.db as db
 
 # this little dummyfile hack fixes an annoying deprecation warning
 # when importing gdata 1.2.4
+
+
 class dummyfile(object):
-    def write(*x): pass
+    def write(*x):
+        pass
+
+
 tmp = sys.stderr
 sys.stderr = dummyfile()
 import gdata.photos.service
 sys.stderr = tmp
 
-import gtk
+from gi.repository import Gtk
+from gi.repository import Gdk
 
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
@@ -69,7 +78,7 @@ PICASA_EMAIL_KEY = u'picasa_email'
 PICASA_ALBUM_KEY = u'picasa_album'
 
 # see http://code.google.com/apis/picasaweb/reference.html#Parameters
-picasa_imgmax = 'd' # "d" means download the original
+picasa_imgmax = 'd'  # "d" means download the original
 picasa_thumbsize = '144u'
 
 default_path = os.path.join(paths.user_dir(), 'photos')
@@ -98,7 +107,6 @@ def update_meta(email=None, album=None, token=None):
     __feed_cache.clear()
 
 
-
 def get_auth_token(email, password):
     """
     Update the Picasa Auth Token using the Google Data ClientClient uri
@@ -107,7 +115,6 @@ def get_auth_token(email, password):
     gd_client.ClientLogin(username=email, password=password)
     __feed_cache.clear()
     return gd_client.GetClientLoginToken()
-
 
 
 def get_photo_feed(gd_client, user=None, album=None, tag=None):
@@ -124,7 +131,6 @@ def get_photo_feed(gd_client, user=None, album=None, tag=None):
         feed += '?kind=photo'
     feed += '&thumbsize=%s&imgmax=%s' % (picasa_thumbsize, picasa_imgmax)
     return gd_client.GetFeed(str(feed))
-
 
 
 class PhotoCache(object):
@@ -250,7 +256,7 @@ class PicasaSettingsDialog(object):
         """
         response = self.window.run()
         self.window.hide()
-        if response != gtk.RESPONSE_OK:
+        if response != Gtk.ResponseType.OK:
             return response
         stored_email = meta.get_default(PICASA_EMAIL_KEY).value.strip()
         email = self.widgets.email_entry.get_text().strip()
@@ -266,7 +272,7 @@ class PicasaSettingsDialog(object):
             if not token:
                 utils.message_dialog(_('Could not authorize Google '\
                                        'account: %s' % email),
-                                     gtk.MESSAGE_ERROR)
+                                     Gtk.MessageType.ERROR)
                 return False
             update_meta(utils.utf8(email), utils.utf8(album),
                         utils.utf8(token))
@@ -337,13 +343,13 @@ def _on_get_feed_publish(worker, data, iconview):
 
     :param worker: GtkWorker
     :param data: a list of ids of the image in the PhotoCache
-    :param iconview: gtk.IconView
+    :param iconview: Gtk.IconView
     """
     model = iconview.get_model()
     cache = PhotoCache()
     for photo_id in data:
         filename = cache[photo_id].path
-        pixbuf = gtk.gdk.pixbuf_new_from_file(filename)
+        pixbuf = Gdk.pixbuf_new_from_file(filename)
         model.append([pixbuf])
     worker.publishQueue.task_done()
 
@@ -363,7 +369,7 @@ def populate_iconview(gd_client, iconview, tag):
         iconview_worker.cancel()
 
     utils.clear_model(iconview)
-    model = gtk.ListStore(gtk.gdk.Pixbuf)
+    model = Gtk.ListStore(Gdk.Pixbuf)
     iconview.set_model(model)
 
     cache = PhotoCache(create=True) # creates the cache if it doesn't exists
@@ -375,25 +381,25 @@ def populate_iconview(gd_client, iconview, tag):
 
 
 
-class StatusBox(gtk.VBox):
+class StatusBox(Gtk.VBox):
     """
     A VBox that makes it easier to control the different states of
     information and errors in the PicasaInfoPage.
     """
     def __init__(self, button_callback):
         super(StatusBox, self).__init__()
-        self.label = gtk.Label()
-        self.pack_start(self.label, False, False)
+        self.label = Gtk.Label()
+        self.pack_start(self.label, False, False, 0)
 
         loading_image = os.path.join(paths.lib_dir(), 'images', 'loading.gif')
-        animation = gtk.gdk.PixbufAnimation(loading_image)
-        self.progress_image = gtk.Image()
+        animation = Gdk.PixbufAnimation(loading_image)
+        self.progress_image = Gtk.Image()
         self.progress_image.set_from_animation(animation)
-        self.pack_start(self.progress_image, False, False)
+        self.pack_start(self.progress_image, False, False, 0)
 
-        self.button = gtk.Button(_('Settings'))
+        self.button = Gtk.Button(_('Settings'))
         self.button.connect('clicked', button_callback)
-        self.pack_start(self.button, False, False, padding=10)
+        self.pack_start(self.button, False, False, 10)
 
 
     def set_text(self, text):
@@ -435,9 +441,9 @@ class PicasaInfoPage(view.InfoBoxPage):
         self.label = _('Images')
         self._disabled = False
         self.gd_client = gdata.photos.service.PhotosService()
-        #self.set_policy(gtk.POLICY_ALWAYS, gtk.POLICY_ALWAYS)
+        #self.set_policy(Gtk.PolicyType.ALWAYS, Gtk.PolicyType.ALWAYS)
 
-        self.iconview = gtk.IconView()
+        self.iconview = Gtk.IconView()
         # TODO: we set the columns here because for some reason the
         # combination of paned windows, notebooks and scrollbars seems
         # to screw up the icon view automatic row/column handling so
@@ -445,7 +451,7 @@ class PicasaInfoPage(view.InfoBoxPage):
         # move between rows ok but if you make it smaller it doesn't
         self.iconview.set_columns(1)
         self.iconview.set_pixbuf_column(0)
-        self.vbox.pack_start(self.iconview)
+        self.vbox.pack_start(self.iconview, True, True, 0)
 
         self._current_row = None
         def on_clicked(*args):
@@ -454,7 +460,7 @@ class PicasaInfoPage(view.InfoBoxPage):
                 self.update(self._current_row)
 
         self.status_box = StatusBox(on_clicked)
-        self.vbox.pack_start(self.status_box)
+        self.vbox.pack_start(self.status_box, True, True, 0)
         self.show_status_box()
 
 
@@ -466,7 +472,7 @@ class PicasaInfoPage(view.InfoBoxPage):
         if self.iconview.get_parent():
             self.vbox.remove(self.iconview)
         if not self.status_box.get_parent():
-            self.vbox.pack_start(self.status_box, True, True)
+            self.vbox.pack_start(self.status_box, True, True, 0)
         self.status_box.show()
 
 
@@ -478,7 +484,7 @@ class PicasaInfoPage(view.InfoBoxPage):
         if self.status_box.get_parent():
             self.vbox.remove(self.status_box)
         if not self.iconview.get_parent():
-            self.vbox.pack_start(self.iconview)
+            self.vbox.pack_start(self.iconview, True, True, 0)
         self.iconview.show()
 
 
@@ -523,15 +529,15 @@ class PicasaInfoPage(view.InfoBoxPage):
                     msg += exc.message
                 else:
                     msg += str(exc)
-                gobject.idle_add(self.on_error, msg, row)
+                GObject.idle_add(self.on_error, msg, row)
                 return
             self.set_busy(False)
             model = self.iconview.get_model()
             if len(model) == 0:
-                gobject.idle_add(self.status_box.set_text, _('No images'))
-                gobject.idle_add(self.show_status_box)
+                GObject.idle_add(self.status_box.set_text, _('No images'))
+                GObject.idle_add(self.show_status_box)
             else:
-                gobject.idle_add(self.hide_status_box)
+                GObject.idle_add(self.hide_status_box)
         worker.connect('done', on_done, False)
 
 
@@ -562,19 +568,19 @@ class PicasaInfoPage(view.InfoBoxPage):
 #         pass
 
 #     def build_gui():
-#         self.assistant = gtk.Assistant()
+#         self.assistant = Gtk.Assistant()
 
 #         # page 1 - information
-#         label = gtk.Label('This tool will help you upload photos to your '\
+#         label = Gtk.Label('This tool will help you upload photos to your '\
 #                           'Picasa Web Albums')
 #         self.assistant.append_page()
 
 #         # page 2 - select the files
-#         vbox = gtk.VBox()
-#         label = gtk.Label('Please select the the images to upload.')
+#         vbox = Gtk.VBox()
+#         label = Gtk.Label('Please select the the images to upload.')
 
 #         # page 3 - tag the files and upload
-#         vbox = gtk.VBox()
+#         vbox = Gtk.VBox()
 
 
 #     def start(self):

@@ -6,7 +6,8 @@
 import os
 import traceback
 
-import gtk
+from gi.repository import Gtk
+from gi.repository import Gdk
 
 from sqlalchemy import *
 from sqlalchemy.orm import *
@@ -51,7 +52,7 @@ def remove_callback(tags):
     except Exception, e:
         msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
         utils.message_details_dialog(msg, traceback.format_exc(),
-                                     type=gtk.MESSAGE_ERROR)
+                                     type=Gtk.MessageType.ERROR)
     finally:
         session.close()
 
@@ -88,15 +89,15 @@ class TagItemGUI(editor.GenericEditorView):
         '''
         create a new tag name
         '''
-        d = gtk.Dialog(_("Enter a tag name"), None,
-                       gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
-                       (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
-        d.set_default_response(gtk.RESPONSE_ACCEPT)
+        d = Gtk.Dialog(_("Enter a tag name"), None,
+                       Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+                       (Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT))
+        d.set_default_response(Gtk.ResponseType.ACCEPT)
         d.set_default_size(250,-1)
-        entry = gtk.Entry()
+        entry = Gtk.Entry()
         entry.connect("activate",
-                      lambda entry: d.response(gtk.RESPONSE_ACCEPT))
-        d.vbox.pack_start(entry)
+                      lambda entry: d.response(Gtk.ResponseType.ACCEPT))
+        d.vbox.pack_start(entry, True, True, 0)
         d.show_all()
         d.run()
         name = unicode(entry.get_text(), encoding='utf-8')
@@ -133,24 +134,23 @@ class TagItemGUI(editor.GenericEditorView):
         """
         Build the tag tree columns.
         """
-        renderer = gtk.CellRendererToggle()
+        renderer = Gtk.CellRendererToggle()
         self.connect(renderer, 'toggled', self.on_toggled)
         renderer.set_property('activatable', True)
-        toggle_column = gtk.TreeViewColumn(None, renderer)
+        toggle_column = Gtk.TreeViewColumn(None, renderer)
         toggle_column.add_attribute(renderer, "active", 0)
 
-        renderer = gtk.CellRendererText()
-        tag_column = gtk.TreeViewColumn(None, renderer, text=1)
+        renderer = Gtk.CellRendererText()
+        tag_column = Gtk.TreeViewColumn(None, renderer, text=1)
 
         return [toggle_column, tag_column]
-
 
     def on_key_released(self, widget, event):
         '''
         if the user hits the delete key on a selected tag in the tag editor
         then delete the tag
         '''
-        keyname = gtk.gdk.keyval_name(event.keyval)
+        keyname = Gdk.keyval_name(event.keyval)
         if keyname != "Delete":
             return
         model, row_iter = self.tag_tree.get_selection().get_selected()
@@ -172,7 +172,7 @@ class TagItemGUI(editor.GenericEditorView):
         except Exception, e:
             utils.message_details_dialog(utils.xml_safe(str(e)),
                                          traceback.format_exc(),
-                                         gtk.MESSAGE_ERROR)
+                                         Gtk.MessageType.ERROR)
         finally:
             session.close()
 
@@ -191,7 +191,7 @@ class TagItemGUI(editor.GenericEditorView):
             self.tag_tree.append_column(col)
 
         # create the model
-        model = gtk.ListStore(bool, str)
+        model = Gtk.ListStore(bool, str)
         item_tags = get_tag_ids(self.values)
         has_tag = False
         tag_query = db.Session().query(Tag)
@@ -202,12 +202,12 @@ class TagItemGUI(editor.GenericEditorView):
             has_tag = False
         self.tag_tree.set_model(model)
 
-        self.tag_tree.add_events(gtk.gdk.KEY_RELEASE_MASK)
+        self.tag_tree.add_events(Gdk.KEY_RELEASE_MASK)
         self.connect(self.tag_tree, "key-release-event", self.on_key_released)
 
         response = self.get_window().run()
-        while response != gtk.RESPONSE_OK \
-          and response != gtk.RESPONSE_DELETE_EVENT:
+        while response != Gtk.ResponseType.OK \
+          and response != Gtk.ResponseType.DELETE_EVENT:
             response = self.get_window().run()
 
         self.get_window().hide()
@@ -472,30 +472,30 @@ def _tag_menu_item_activated(widget, tag_name):
 _tags_menu_item = None
 
 def _reset_tags_menu():
-    tags_menu = gtk.Menu()
-    add_tag_menu_item = gtk.MenuItem(_('Tag Selection'))
+    tags_menu = Gtk.Menu()
+    add_tag_menu_item = Gtk.MenuItem(_('Tag Selection'))
     add_tag_menu_item.connect('activate', _on_add_tag_activated)
-    accel_group = gtk.AccelGroup()
+    accel_group = Gtk.AccelGroup()
     bauble.gui.window.add_accel_group(accel_group)
     add_tag_menu_item.add_accelerator('activate', accel_group, ord('T'),
-                                      gtk.gdk.CONTROL_MASK, gtk.ACCEL_VISIBLE)
+                                      Gdk.CONTROL_MASK, Gtk.ACCEL_VISIBLE)
     tags_menu.append(add_tag_menu_item)
 
-    #manage_tag_item = gtk.MenuItem('Manage Tags')
+    #manage_tag_item = Gtk.MenuItem('Manage Tags')
     #tags_menu.append(manage_tag_item)
-    tags_menu.append(gtk.SeparatorMenuItem())
+    tags_menu.append(Gtk.SeparatorMenuItem())
     session = db.Session()
     query = session.query(Tag)
     try:
         for tag in query:
-            item = gtk.MenuItem(tag.tag, use_underline=False)
+            item = Gtk.MenuItem(tag.tag, use_underline=False)
             item.connect("activate", _tag_menu_item_activated, tag.tag)
             tags_menu.append(item)
     except Exception:
         debug(traceback.format_exc())
         msg = _('Could not create the tags menus')
         utils.message_details_dialog(msg, traceback.format_exc(),
-                                     gtk.MESSAGE_ERROR)
+                                     Gtk.MessageType.ERROR)
     #	raise
             #debug('** maybe the tags table hasn\'t been created yet')
 

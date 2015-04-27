@@ -14,7 +14,8 @@ import xml.sax.saxutils as saxutils
 
 import dateutil.parser as date_parser
 
-import gtk
+from gi.repository import Gtk
+from gi.repository import Gdk
 
 from sqlalchemy import *
 from sqlalchemy.orm import *
@@ -338,11 +339,11 @@ class PropagationTabPresenter(editor.GenericEditorPresenter):
                           self.on_add_button_clicked)
         tab_box = self.view.widgets.prop_tab_box
         for kid in tab_box:
-            if isinstance(kid, gtk.Box):
+            if isinstance(kid, Gtk.Box):
                 tab_box.remove(kid) # remove old prop boxes
         for prop in self.model.propagations:
             box = self.create_propagation_box(prop)
-            tab_box.pack_start(box, expand=False, fill=True)
+            tab_box.pack_start(box, False, True, 0)
         self.__dirty = False
 
 
@@ -364,8 +365,7 @@ class PropagationTabPresenter(editor.GenericEditorPresenter):
         committed = editor.start(commit=False)
         if committed:
             box = self.create_propagation_box(committed)
-            self.view.widgets.prop_tab_box.pack_start(box, expand=False,
-                                                      fill=True)
+            self.view.widgets.prop_tab_box.pack_start(box, False, True, 0)
             self.__dirty = True
         else:
             propagation.plant = None
@@ -374,15 +374,15 @@ class PropagationTabPresenter(editor.GenericEditorPresenter):
     def create_propagation_box(self, propagation):
         """
         """
-        hbox = gtk.HBox()
-        expander = gtk.Expander()
-        hbox.pack_start(expander, expand=True, fill=True)
+        hbox = Gtk.HBox()
+        expander = Gtk.Expander()
+        hbox.pack_start(expander, True, True, 0)
 
-        label_alignment = gtk.Alignment()
+        label_alignment = Gtk.Alignment()
         label_alignment.props.bottom_padding = 10
         expander.add(label_alignment)
 
-        label = gtk.Label(propagation.get_summary())
+        label = Gtk.Label(propagation.get_summary())
         label.props.wrap = True
         label.set_alignment(0.1, 0.5)
         label_alignment.add(label)
@@ -395,14 +395,14 @@ class PropagationTabPresenter(editor.GenericEditorPresenter):
                 self.__dirty = True
             self.parent_ref().refresh_sensitivity()
 
-        alignment = gtk.Alignment()
-        hbox.pack_start(alignment, expand=False, fill=False)
-        button_box = gtk.HBox(spacing=5)
+        alignment = Gtk.Alignment()
+        hbox.pack_start(alignment, False, False, 0)
+        button_box = Gtk.HBox(spacing=5)
         alignment.add(button_box)
-        button = gtk.Button(stock=gtk.STOCK_EDIT)
+        button = Gtk.Button(stock=Gtk.STOCK_EDIT)
         self.view.connect(button, 'clicked', on_edit_clicked, propagation,
                           label)
-        button_box.pack_start(button, expand=False, fill=False)
+        button_box.pack_start(button, False, False, 0)
 
         def on_remove_clicked(button, propagation, box):
             self.model.propagations.remove(propagation)
@@ -410,12 +410,12 @@ class PropagationTabPresenter(editor.GenericEditorPresenter):
             self.__dirty = True
             self.parent_ref().refresh_sensitivity()
 
-        remove_button = gtk.Button()
-        img = gtk.image_new_from_stock(gtk.STOCK_REMOVE, gtk.ICON_SIZE_BUTTON)
+        remove_button = Gtk.Button()
+        img = Gtk.image_new_from_stock(Gtk.STOCK_REMOVE, Gtk.ICON_SIZE_BUTTON)
         remove_button.props.image = img
         self.view.connect(remove_button, 'clicked', on_remove_clicked,
                           propagation, hbox)
-        button_box.pack_start(remove_button, expand=False, fill=False)
+        button_box.pack_start(remove_button, False, False, 0)
 
         # TODO: add a * to the propagation label for uncommitted propagations
         prop_type = prop_type_values[propagation.prop_type]
@@ -577,7 +577,7 @@ class CuttingPresenter(editor.GenericEditorPresenter):
         self.assign_simple_handler('cutting_rooted_pct_entry',
                                    'rooted_pct')
 
-        model = gtk.ListStore(object)
+        model = Gtk.ListStore(object)
         self.view.widgets.rooted_treeview.set_model(model)
 
         def _rooted_data_func(column, cell, model, treeiter, prop):
@@ -1034,12 +1034,12 @@ class PropagationEditor(editor.GenericModelViewPresenterEditor):
         self.presenter = PropagationEditorPresenter(self.model, view)
 
         # add quick response keys
-        self.attach_response(view.get_window(), gtk.RESPONSE_OK, 'Return',
-                             gtk.gdk.CONTROL_MASK)
+        self.attach_response(view.get_window(), Gtk.ResponseType.OK, 'Return',
+                             Gdk.CONTROL_MASK)
         self.attach_response(view.get_window(), self.RESPONSE_OK_AND_ADD, 'k',
-                             gtk.gdk.CONTROL_MASK)
+                             Gdk.CONTROL_MASK)
         self.attach_response(view.get_window(), self.RESPONSE_NEXT, 'n',
-                             gtk.gdk.CONTROL_MASK)
+                             Gdk.CONTROL_MASK)
 
         # set the default focus
         # if self.model.species is None:
@@ -1072,7 +1072,7 @@ class PropagationEditor(editor.GenericModelViewPresenterEditor):
         not_ok_msg = 'Are you sure you want to lose your changes?'
         self._return = None
         self.clean_model()
-        if response == gtk.RESPONSE_OK or response in self.ok_responses:
+        if response == Gtk.ResponseType.OK or response in self.ok_responses:
             try:
                 self._return = self.model
                 if self.presenter.dirty() and commit:
@@ -1080,7 +1080,7 @@ class PropagationEditor(editor.GenericModelViewPresenterEditor):
             except DBAPIError, e:
                 msg = _('Error committing changes.\n\n%s') % \
                       utils.xml_safe_utf8(unicode(e.orig))
-                utils.message_details_dialog(msg, str(e), gtk.MESSAGE_ERROR)
+                utils.message_details_dialog(msg, str(e), Gtk.MessageType.ERROR)
                 self.session.rollback()
                 return False
             except Exception, e:
@@ -1089,7 +1089,7 @@ class PropagationEditor(editor.GenericModelViewPresenterEditor):
                         % utils.xml_safe_utf8(e)
                 debug(traceback.format_exc())
                 utils.message_details_dialog(msg, traceback.format_exc(),
-                                             gtk.MESSAGE_ERROR)
+                                             Gtk.MessageType.ERROR)
                 self.session.rollback()
                 return False
         elif self.presenter.dirty() and utils.yes_no_dialog(not_ok_msg) \

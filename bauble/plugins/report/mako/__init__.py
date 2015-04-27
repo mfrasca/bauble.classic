@@ -3,7 +3,7 @@ import shutil
 import sys
 import tempfile
 
-import gtk
+from gi.repository import Gtk
 
 from sqlalchemy import *
 from sqlalchemy.orm import *
@@ -33,7 +33,7 @@ class MakoFormatterSettingsBox(SettingsBox):
         # remove_parent()
         self.settings_box = self.widgets.settings_box
         self.widgets.remove_parent(self.widgets.settings_box)
-        self.pack_start(self.settings_box)
+        self.pack_start(self.settings_box, True, True, 0)
 
 
     def get_settings(self):
@@ -82,7 +82,7 @@ class MakoFormatterPlugin(FormatterPlugin):
         use_private = kwargs.get('private', True)
         if not template_filename:
             msg = _('Please selecte a template.')
-            utils.message_dialog(error_msg, gtk.MESSAGE_WARNING)
+            utils.message_dialog(error_msg, Gtk.MessageType.WARNING)
             return False
         template = Template(filename=template_filename, output_encoding='utf-8')
         session = db.Session()

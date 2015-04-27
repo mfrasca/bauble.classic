@@ -30,6 +30,9 @@ version_tuple = version.split('.')
 
 from bauble.i18n import _
 
+from gi.repository import Gtk, Gdk
+builder = Gtk.Builder()
+
 
 def main_is_frozen():
     """
@@ -102,7 +105,7 @@ def quit():
     """
     Stop all tasks and quit Bauble.
     """
-    import gtk
+    from gi.repository import Gtk
     import bauble.utils as utils
     from bauble.utils.log import error
     try:
@@ -113,7 +116,7 @@ def quit():
         task.kill()
     try:
         save_state()
-        gtk.main_quit()
+        Gtk.main_quit()
     except RuntimeError, e:
         # in case main_quit is called before main, e.g. before
         # bauble.main() is called
@@ -133,7 +136,7 @@ def command_handler(cmd, arg):
     :param arg: The arg to pass to the command handler
     :type arg: list
     """
-    import gtk
+    from gi.repository import Gtk
     from bauble.utils.log import error
     import bauble.utils as utils
     import bauble.pluginmgr as pluginmgr
@@ -167,7 +170,7 @@ def command_handler(cmd, arg):
         msg = utils.xml_safe_utf8(e)
         error('bauble.command_handler(): %s' % msg)
         utils.message_details_dialog(msg, traceback.format_exc(),
-                                     gtk.MESSAGE_ERROR)
+                                     Gtk.MessageType.ERROR)
 
 
 conn_default_pref = "conn.default"
@@ -185,26 +188,16 @@ def main(uri=None):
     :type uri: str
     """
     # TODO: it would be nice to show a Tk dialog here saying we can't
-    # import gtk...but then we would have to include all of the Tk libs in
+    # import Gtk...but then we would have to include all of the Tk libs in
     # with the win32 batteries-included installer
     try:
-        import gtk
-        import gobject
+        from gi.repository import Gtk
+        from gi.repository import GObject
     except ImportError, e:
-        print _('** Error: could not import gtk and/or gobject')
+        print _('** Error: could not import Gtk and/or gobject')
         print e
         if sys.platform == 'win32':
             print _('Please make sure that GTK_ROOT\\bin is in your PATH.')
-        sys.exit(1)
-
-    import gtk.gdk
-    import pygtk
-    if not main_is_frozen():
-        pygtk.require("2.0")
-
-    display = gtk.gdk.display_get_default()
-    if display is None:
-        print _("**Error: Bauble must be run in a windowed environment.")
         sys.exit(1)
 
     import bauble.pluginmgr as pluginmgr
@@ -217,12 +210,12 @@ def main(uri=None):
         os.makedirs(paths.user_dir())
 
     # initialize threading
-    gobject.threads_init()
+    GObject.threads_init()
 
     try:
         import bauble.db as db
     except Exception, e:
-        utils.message_dialog(utils.xml_safe_utf8(e), gtk.MESSAGE_ERROR)
+        utils.message_dialog(utils.xml_safe_utf8(e), Gtk.MessageType.ERROR)
         sys.exit(1)
 
     # declare module level variables
@@ -272,7 +265,7 @@ def main(uri=None):
                 msg = _("Could not open connection.\n\n%s") % \
                     utils.xml_safe_utf8(e)
                 utils.message_details_dialog(msg, traceback.format_exc(),
-                                             gtk.MESSAGE_ERROR)
+                                             Gtk.MessageType.ERROR)
                 uri = None
     else:
         db.open(uri, True, True)
@@ -294,7 +287,7 @@ def main(uri=None):
     gui = ui.GUI()
 
     def _post_loop():
-        gtk.gdk.threads_enter()
+        Gdk.threads_enter()
         try:
             if isinstance(open_exc, err.DatabaseError):
                 msg = _('Would you like to create a new Bauble database at '
@@ -314,19 +307,19 @@ def main(uri=None):
                     except Exception, e:
                         utils.message_details_dialog(utils.xml_safe_utf8(e),
                                                      traceback.format_exc(),
-                                                     gtk.MESSAGE_ERROR)
+                                                     Gtk.MessageType.ERROR)
                         error(e)
             else:
                 pluginmgr.init()
         except Exception, e:
             warning(traceback.format_exc())
             warning(e)
-            utils.message_dialog(utils.utf8(e), gtk.MESSAGE_WARNING)
-        gtk.gdk.threads_leave()
+            utils.message_dialog(utils.utf8(e), Gtk.MessageType.WARNING)
+        Gdk.threads_leave()
 
-    gobject.idle_add(_post_loop)
+    GObject.idle_add(_post_loop)
 
     gui.show()
-    gtk.threads_enter()
-    gtk.main()
-    gtk.threads_leave()
+    Gtk.threads_enter()
+    Gtk.main()
+    Gtk.threads_leave()

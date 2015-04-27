@@ -23,7 +23,7 @@
                 <property name="border_width">5</property>
                 <property name="spacing">5</property>
                 <child>
-                  <object class="GtkComboBox" id="names_combo">
+                  <object class="GtkComboBoxText" id="names_combo">
                     <property name="visible">True</property>
                     <signal name="changed" handler="on_opt_formatters_combo_changed"/>
                   </object>
@@ -86,7 +86,7 @@
                           <object class="GtkHBox" id="hbox2">
                             <property name="visible">True</property>
                             <child>
-                              <object class="GtkComboBox" id="formatter_combo">
+                              <object class="GtkComboBoxText" id="formatter_combo">
                                 <property name="visible">True</property>
                               </object>
                               <packing>

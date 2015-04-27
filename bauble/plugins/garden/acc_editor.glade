@@ -85,7 +85,7 @@
                                     <property name="xalign">0</property>
                                     <property name="xscale">0</property>
                                     <child>
-                                      <object class="GtkComboBox" id="acc_id_qual_combo">
+                                      <object class="GtkComboBoxText" id="acc_id_qual_combo">
                                         <property name="visible">True</property>
                                       </object>
                                     </child>
@@ -155,7 +155,7 @@
                                   </packing>
                                 </child>
                                 <child>
-                                  <object class="GtkComboBox" id="acc_id_qual_rank_combo">
+                                  <object class="GtkComboBoxText" id="acc_id_qual_rank_combo">
                                     <property name="visible">True</property>
                                   </object>
                                   <packing>
@@ -229,7 +229,7 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkComboBoxEntry" id="acc_recvd_type_comboentry">
+                                      <object class="GtkEntry" id="acc_recvd_type_comboentry">
                                         <property name="visible">True</property>
                                       </object>
                                       <packing>
@@ -476,7 +476,7 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkComboBoxEntry" id="intended_loc_comboentry">
+                                      <object class="GtkEntry" id="intended_loc_comboentry">
                                         <property name="visible">True</property>
                                       </object>
                                       <packing>
@@ -503,7 +503,7 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkComboBoxEntry" id="intended2_loc_comboentry">
+                                      <object class="GtkEntry" id="intended2_loc_comboentry">
                                         <property name="visible">True</property>
                                       </object>
                                       <packing>
@@ -639,7 +639,7 @@
                                     <property name="xalign">0</property>
                                     <property name="xscale">0</property>
                                     <child>
-                                      <object class="GtkComboBox" id="acc_prov_combo">
+                                      <object class="GtkComboBoxText" id="acc_prov_combo">
                                         <property name="visible">True</property>
                                       </object>
                                     </child>
@@ -655,7 +655,7 @@
                                     <property name="xalign">0</property>
                                     <property name="xscale">0</property>
                                     <child>
-                                      <object class="GtkComboBox" id="acc_wild_prov_combo">
+                                      <object class="GtkComboBoxText" id="acc_wild_prov_combo">
                                         <property name="visible">True</property>
                                         <property name="sensitive">False</property>
                                       </object>
@@ -716,7 +716,7 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkComboBoxEntry" id="acc_source_comboentry">
+                          <object class="GtkEntry" id="acc_source_comboentry">
                             <property name="visible">True</property>
                           </object>
                           <packing>
@@ -2320,7 +2320,7 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkComboBox" id="ver_level_combo">
+                      <object class="GtkComboBoxText" id="ver_level_combo">
                         <property name="visible">True</property>
                       </object>
                       <packing>
@@ -2661,7 +2661,7 @@
               </packing>
             </child>
             <child>
-              <object class="GtkComboBox" id="source_type_combo">
+              <object class="GtkComboBoxText" id="source_type_combo">
                 <property name="visible">True</property>
               </object>
               <packing>

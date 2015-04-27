@@ -13,10 +13,9 @@
 # You should have received a copy of the GNU General Public License
 # along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 
-from threading import Lock, RLock, Thread, _MainThread, currentThread
+from threading import Thread, _MainThread, currentThread
 import Queue
-from gtk.gdk import threads_enter, threads_leave
-from gobject import GObject, SIGNAL_RUN_FIRST
+from gi.repository import Gdk, GObject
 
 # This code originally from:
 # http://code.activestate.com/recipes/521881/
@@ -25,9 +24,9 @@ from gobject import GObject, SIGNAL_RUN_FIRST
 class GtkWorker(GObject, Thread):
 
     __gsignals__ = {
-        "progressed": (SIGNAL_RUN_FIRST, None, (float,)),
-        "published":  (SIGNAL_RUN_FIRST, None, (object,)),
-        "done":       (SIGNAL_RUN_FIRST, None, ())
+        "progressed": (GObject.SIGNAL_RUN_FIRST, None, (float,)),
+        "published":  (GObject.SIGNAL_RUN_FIRST, None, (object,)),
+        "done":       (GObject.SIGNAL_RUN_FIRST, None, ())
     }
 
     def __init__(self, func, *func_args, **func_kwargs):
@@ -36,10 +35,10 @@ class GtkWorker(GObject, Thread):
         # WARNING: This deadlocks if calling code already has the gdk lock and
         # is not the MainThread
         if type(currentThread()) != _MainThread:
-            threads_enter()
+            Gdk.threads_enter()
         GObject.__init__(self)
         if type(currentThread()) != _MainThread:
-            threads_leave()
+            Gdk.threads_leave()
 
         Thread.__init__(self, args=func_args, kwargs=func_kwargs)
         self.func_args = func_args
@@ -76,7 +75,7 @@ class GtkWorker(GObject, Thread):
                     v = self.queue.get()
                     if v is None:
                         break
-                    threads_enter()
+                    Gdk.threads_enter()
                     l = [v]
                     while True:
                         try:
@@ -91,7 +90,7 @@ class GtkWorker(GObject, Thread):
                         elif self.sendPolicy == self.SEND_LAST:
                             self.parrent.emit(self.signal, l[-1])
                     finally:
-                        threads_leave()
+                        Gdk.threads_leave()
 
         self.publishQueue = Queue.Queue()
         self.publisher = Publisher(
@@ -160,15 +159,15 @@ class GtkWorker(GObject, Thread):
         If this is not true, and the work is not done, calling get
         will result in a deadlock.
 
-        If you haven't used the gtk.gdk.threads_enter nor
-        gtk.gdk.threads_leave function, everything should be fine."""
+        If you haven't used the Gdk.threads_enter nor
+        Gdk.threads_leave function, everything should be fine."""
 
         if not self.isDone():
             if type(currentThread()) == _MainThread:
-                threads_leave()
+                Gdk.threads_leave()
             self.join(timeout)
             if type(currentThread()) == _MainThread:
-                threads_enter()
+                Gdk.threads_enter()
             if self.isAlive():
                 return None
             self.done = True
@@ -185,11 +184,11 @@ class GtkWorker(GObject, Thread):
         self.result = self.func(self, *self.func_args, **self.func_kwargs)
         self.done = True
         if self.connections["done"] >= 1:
-            threads_enter()
+            Gdk.threads_enter()
             # In python 2.5 we can use self.publishQueue.join() to wait for all
             # publish items to have been processed.
             self.emit("done")
-            threads_leave()
+            Gdk.threads_leave()
 
     def cancel(self):
         """
@@ -257,7 +256,6 @@ class GtkWorker(GObject, Thread):
 
 if __name__ == "__main__":
     def findPrimes(worker):
-        from math import sqrt
         limit = 10**4.
         primes = []
         for n in xrange(2, int(limit)+1):
@@ -274,14 +272,14 @@ if __name__ == "__main__":
             worker.setProgress(n/limit)
         return primes
 
-    import gtk
-    w = gtk.Window()
-    vbox = gtk.VBox()
+    from gi.repository import Gtk
+    w = Gtk.Window()
+    vbox = Gtk.VBox()
     w.add(vbox)
 
     worker = GtkWorker(findPrimes)
 
-    sbut = gtk.Button("Start")
+    sbut = Gtk.Button("Start")
 
     def callback(button, *args):
         sbut.set_sensitive(False)
@@ -289,7 +287,7 @@ if __name__ == "__main__":
     sbut.connect("clicked", callback)
     vbox.add(sbut)
 
-    cbut = gtk.Button("Cancel")
+    cbut = Gtk.Button("Cancel")
 
     def callback(button, *args):
         cbut.set_sensitive(False)
@@ -297,7 +295,7 @@ if __name__ == "__main__":
     cbut.connect("clicked", callback)
     vbox.add(cbut)
 
-    gbut = gtk.Button("Get")
+    gbut = Gtk.Button("Get")
 
     def callback(button, *args):
         gbut.set_sensitive(False)
@@ -305,14 +303,14 @@ if __name__ == "__main__":
     gbut.connect("clicked", callback)
     vbox.add(gbut)
 
-    prog = gtk.ProgressBar()
+    prog = Gtk.ProgressBar()
 
     def callback(worker, progress):
         prog.set_fraction(progress)
     worker.connect("progressed", callback)
     vbox.add(prog)
 
-    field = gtk.Entry()
+    field = Gtk.Entry()
 
     def process(worker, primes):
         field.set_text(str(primes[-1]))
@@ -323,7 +321,7 @@ if __name__ == "__main__":
         print "Finished, Cancelled:", worker.isCancelled()
     worker.connect("done", done)
 
-    w.connect("destroy", gtk.main_quit)
+    w.connect("destroy", Gtk.main_quit)
     w.show_all()
-    gobject.threads_init()
-    gtk.main()
+    Gdk.threads_init()
+    Gtk.main()

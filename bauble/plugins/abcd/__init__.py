@@ -3,9 +3,7 @@
 #
 
 import os
-import csv
-
-import gtk
+from gi.repository import Gtk
 
 from sqlalchemy import *
 from sqlalchemy.orm import *
@@ -277,15 +275,15 @@ class ABCDExporter(object):
     """
 
     def start(self, filename=None, plants=None):
-        if filename == None: # no filename, ask the user
-            d = gtk.FileChooserDialog(_("Choose a file to export to..."), None,
-                                      gtk.FILE_CHOOSER_ACTION_SAVE,
-                                      (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT,
-                                       gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL))
+        if filename==None:  # no filename, ask the user
+            d = Gtk.FileChooserDialog(_("Choose a file to export to..."), None,
+                                      Gtk.FileChooserAction.SAVE,
+                                      (Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT,
+                                       Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL))
             response = d.run()
             filename = d.get_filename()
             d.destroy()
-            if response != gtk.RESPONSE_ACCEPT or filename == None:
+            if response != Gtk.ResponseType.ACCEPT or filename == None:
                 return
 
         if plants:
@@ -330,7 +328,7 @@ class ABCDExporter(object):
         if not validate_xml(data):
             msg = _("The ABCD file was created but failed to validate "
                     "correctly against the ABCD standard.")
-            utils.message_dialog(msg, gtk.MESSAGE_WARNING)
+            utils.message_dialog(msg, Gtk.MessageType.WARNING)
 
 
 class ABCDExportTool(pluginmgr.Tool):

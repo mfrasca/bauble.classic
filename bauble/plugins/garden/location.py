@@ -4,6 +4,8 @@
 import os
 import traceback
 
+from gi.repository import Gdk
+
 from sqlalchemy import *
 from sqlalchemy.orm import *
 from sqlalchemy.orm.session import object_session
@@ -255,12 +257,11 @@ class LocationEditor(GenericModelViewPresenterEditor):
 
         # add quick response keys
         self.attach_response(view.get_window(), gtk.RESPONSE_OK, 'Return',
-                             gtk.gdk.CONTROL_MASK)
+                             Gdk.CONTROL_MASK)
         self.attach_response(view.get_window(), self.RESPONSE_OK_AND_ADD, 'k',
-                             gtk.gdk.CONTROL_MASK)
+                             Gdk.CONTROL_MASK)
         self.attach_response(view.get_window(), self.RESPONSE_NEXT, 'n',
-                             gtk.gdk.CONTROL_MASK)
-
+                             Gdk.CONTROL_MASK)
 
     def handle_response(self, response):
         '''
@@ -341,7 +342,7 @@ class GeneralLocationExpander(InfoExpander):
         InfoExpander.__init__(self, _("General"), widgets)
         general_box = self.widgets.loc_gen_box
         self.widgets.remove_parent(general_box)
-        self.vbox.pack_start(general_box)
+        self.vbox.pack_start(general_box, True, True, 0)
 
 
     def update(self, row):
@@ -365,7 +366,7 @@ class DescriptionExpander(InfoExpander):
         InfoExpander.__init__(self, _("Description"), widgets)
         descr_box = self.widgets.loc_descr_box
         self.widgets.remove_parent(descr_box)
-        self.vbox.pack_start(descr_box)
+        self.vbox.pack_start(descr_box, True, True, 0)
 
 
     def update(self, row):

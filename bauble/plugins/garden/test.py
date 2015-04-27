@@ -3,7 +3,7 @@ import datetime
 import unittest
 
 
-import gtk
+from gi.repository import Gtk
 
 from nose import SkipTest
 from sqlalchemy import *
@@ -285,9 +285,9 @@ class PlantTests(GardenTestCase):
         Test creating multiple plants with the plant editor.
         """
         try:
-            import gtk
+            from gi.repository import Gtk
         except ImportError:
-            raise SkipTest('could not import gtk')
+            raise SkipTest('could not import Gtk')
 
         # use our own plant because PlantEditor.commit_changes() will
         # only work in bulk mode when the plant is in session.new
@@ -318,7 +318,7 @@ class PlantTests(GardenTestCase):
         # create multiple plant codes
         widgets.plant_code_entry.set_text(rng)
         update_gui()
-        self.editor.handle_response(gtk.RESPONSE_OK)
+        self.editor.handle_response(Gtk.ResponseType.OK)
 
         for code in utils.range_builder(rng):
             q = self.session.query(Plant).join('accession').\
@@ -351,9 +351,9 @@ class PlantTests(GardenTestCase):
 
     def test_branch_editor(self):
         try:
-            import gtk
+            from gi.repository import Gtk
         except ImportError:
-            raise SkipTest('could not import gtk')
+            raise SkipTest('could not import Gtk')
 
         # test argument checks
         #
@@ -380,7 +380,7 @@ class PlantTests(GardenTestCase):
         new_quantity = 2
         widgets.plant_quantity_entry.props.text = new_quantity
         update_gui()
-        self.editor.handle_response(gtk.RESPONSE_OK)
+        self.editor.handle_response(Gtk.ResponseType.OK)
 
         # there should only be three plants,
         new_plant = self.session.query(Plant).\
@@ -593,7 +593,7 @@ class PropagationTests(GardenTestCase):
             #debug('%s=%s' % (widget, default_cutting_values[attr]))
             view.set_widget_value(widget, default_cutting_values[attr])
         update_gui()
-        self.editor.handle_response(gtk.RESPONSE_OK)
+        self.editor.handle_response(Gtk.ResponseType.OK)
         self.editor.commit_changes()
         model = self.editor.model
         s = object_session(model)
@@ -624,13 +624,13 @@ class PropagationTests(GardenTestCase):
                               default_propagation_values['notes'])
         for widget, attr in seed_presenter.widget_to_field_map.iteritems():
             w = widgets[widget]
-            if isinstance(w, gtk.ComboBoxEntry) and not w.get_model():
+            if isinstance(w, Gtk.ComboBoxEntry) and not w.get_model():
                 widgets[widget].child.props.text = default_seed_values[attr]
             view.set_widget_value(widget, default_seed_values[attr])
 
         # update the editor, send the RESPONSE_OK signal and commit the changes
         update_gui()
-        editor.handle_response(gtk.RESPONSE_OK)
+        editor.handle_response(Gtk.ResponseType.OK)
         editor.presenter.cleanup()
         model_id = editor.model.id
         editor.commit_changes()
@@ -676,11 +676,11 @@ class PropagationTests(GardenTestCase):
         # check that the values loaded correctly from the model in the
         # editor widget
         def get_widget_text(w):
-            if isinstance(w, gtk.TextView):
+            if isinstance(w, Gtk.TextView):
                 return w.get_buffer().props.text
-            elif isinstance(w, gtk.Entry):
+            elif isinstance(w, Gtk.Entry):
                 return w.props.text
-            elif isinstance(w, gtk.ComboBoxEntry):
+            elif isinstance(w, Gtk.ComboBoxEntry):
                 return w.get_active_text()
             else:
                 raise ValueError('%s not supported' % type(w))
@@ -1010,8 +1010,8 @@ class AccessionTests(GardenTestCase):
         toggle_cell = widgets.prop_toggle_cell.emit('toggled', 0)
 
         # commit the changes and cleanup
-        import gtk
-        self.editor.handle_response(gtk.RESPONSE_OK)
+        from gi.repository import Gtk
+        self.editor.handle_response(Gtk.ResponseType.OK)
         self.editor.session.close()
 
         # open a seperate session and make sure everything committed
@@ -1043,8 +1043,8 @@ class AccessionTests(GardenTestCase):
 
         # commit the changes and cleanup
         self.editor.model.name = u'asda'
-        import gtk
-        self.editor.handle_response(gtk.RESPONSE_OK)
+        from gi.repository import Gtk
+        self.editor.handle_response(Gtk.ResponseType.OK)
         self.editor.session.close()
 
     def itest_editor(self):
@@ -1176,8 +1176,8 @@ class LocationTests(GardenTestCase):
         assert not widgets.loc_next_button.props.sensitive
 
         # test the accept buttons aren't sensitive from setting the textview
-        import gtk
-        buff = gtk.TextBuffer()
+        from gi.repository import Gtk
+        buff = Gtk.TextBuffer()
         buff.set_text('saasodmadomad')
         widgets.loc_desc_textview.set_buffer(buff)
         assert not widgets.loc_ok_button.props.sensitive
@@ -1186,7 +1186,7 @@ class LocationTests(GardenTestCase):
 
         # commit the changes and cleanup
         editor.model.name = editor.model.code = u'asda'
-        editor.handle_response(gtk.RESPONSE_OK)
+        editor.handle_response(Gtk.ResponseType.OK)
         editor.session.close()
         editor.presenter.cleanup()
         del editor

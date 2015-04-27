@@ -27,9 +27,9 @@ import os
 import traceback
 from random import random
 
-import gtk
+from gi.repository import Gtk
+from gi.repository import Gdk
 
-from bauble.i18n import _
 from sqlalchemy import and_, func
 from sqlalchemy import ForeignKey, Column, Unicode, Integer, Boolean, \
     UnicodeText, UniqueConstraint
@@ -37,6 +37,7 @@ from sqlalchemy.orm import relation, backref, object_mapper
 from sqlalchemy.orm.session import object_session
 from sqlalchemy.exc import DBAPIError
 
+from bauble.i18n import _
 import bauble.db as db
 from bauble.error import CheckConditionError
 from bauble.editor import GenericEditorView, GenericEditorPresenter, \
@@ -54,7 +55,8 @@ from bauble.utils.log import debug
 from bauble.view import InfoBox, InfoExpander, PropertiesExpander, \
     select_in_search_results, Action
 import bauble.view as view
-
+from bauble.editor import NoteBox
+from bauble import builder
 
 # TODO: do a magic attribute on plant_id that checks if a plant id
 # already exists with the accession number, this probably won't work
@@ -68,9 +70,79 @@ plant_delimiter_key = u'plant_delimiter'
 default_plant_delimiter = u'.'
 
 
+class PictureBox(NoteBox):
+    pass
+
+
+class PictureViewWindow(GenericEditorView):
+    """
+
+    window is sticky and shows pictures for current plant, meaning each
+    time your selection moves to a different plant, this window will be
+    updated. if your selection is not on a plant, I don't know yet.
+    """
+
+    def __init__(self, parent=None):
+        self.filename = filename = os.path.join(
+            paths.lib_dir(), 'plugins', 'garden', 'picture_preview.glade')
+        builder.add_from_file(filename)
+
+        super(PictureViewWindow, self).__init__(filename, parent=parent)
+        self.get_window().show()
+        self.get_window().set_keep_above(True)
+        self.box = self.widgets.notes_expander_box
+        for w in list(self.box.children):
+            w.destroy()
+        import bauble
+        mainview = bauble.gui.get_view()
+        mainview.floatingbox = self
+
+    def get_window(self):
+        return self.widgets.window2
+
+    def on_window_delete(self, dialog, event=None):
+        """
+        Called if self.get_window() is a Gtk.Dialog and it receives
+        the close signal.
+        """
+        import bauble
+        super(PictureViewWindow, self).on_window_delete(dialog, event)
+        mainview = bauble.gui.get_view()
+        mainview.floatingbox = None
+        return False
+
+    def update(self, row):
+        print type(row), row, row.notes
+
+        from gi.repository import Gtk, Gdk
+        for note in row.notes:
+            if note.category != u'<picture>':
+                continue
+            tb = Gtk.Builder()
+            tb.add_from_file(self.filename)
+            notes_box = tb.get_object('notes_box')
+            self.box.add(notes_box)
+            expander = tb.get_object('notes_expander')
+            expander.set_expanded(True)
+            picture_frame = tb.get_object('picture_frame')
+            im = Gtk.Image()
+            pixbuf = Gdk.pixbuf_new_from_file(
+                os.path.join(prefs.prefs[prefs.picture_root_pref], row.notes))
+            scale_x = pixbuf.get_width() / 400
+            scale_y = pixbuf.get_height() / 400
+            scale = max(scale_x, scale_y)
+            x = int(pixbuf.get_width() / scale)
+            y = int(pixbuf.get_height() / scale)
+            scaled_buf = pixbuf.scale_simple(x, y, Gdk.INTERP_BILINEAR)
+            im.set_from_pixbuf(scaled_buf)
+            picture_frame.add(im)
+
+
 def show_pictures_callback(plants):
-    ## should activate a window that shows the pictures for this plant
-    return None
+    """activate window showing pictures for plant"""
+
+    PictureViewWindow()
+    return False
 
 
 def edit_callback(plants):
@@ -82,7 +154,7 @@ def branch_callback(plants):
     if plants[0].quantity <= 1:
         msg = _("Not enough plants to branch.  A plant should have at least "
                 "a quantity of 2 before it can be branched")
-        utils.message_dialog(msg, gtk.MESSAGE_WARNING)
+        utils.message_dialog(msg, Gtk.MessageType.WARNING)
         return
 
     e = PlantEditor(model=plants[0], branch_mode=True)
@@ -106,7 +178,7 @@ def remove_callback(plants):
         msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
 
         utils.message_details_dialog(msg, traceback.format_exc(),
-                                     type=gtk.MESSAGE_ERROR)
+                                     type=Gtk.MessageType.ERROR)
     finally:
         session.close()
     return True
@@ -161,7 +233,7 @@ def get_next_code(acc):
     if codes:
         try:
             next = max([int(code[0]) for code in codes])+1
-        except Exception, e:
+        except Exception:
             return None
     return utils.utf8(next)
 
@@ -202,7 +274,7 @@ class PlantSearch(SearchStrategy):
         # plant where accession.code=2009.0039
 
         # TODO: searches like 2009.0039.% or * would be handy
-        r1 = super(PlantSearch, self).search(text, session)
+        super(PlantSearch, self).search(text, session)
         delimiter = Plant.get_delimiter()
         if delimiter not in text:
             return []
@@ -715,7 +787,7 @@ class PlantEditorPresenter(GenericEditorPresenter):
         value = entry.props.text
         try:
             value = abs(int(value))
-        except ValueError, e:
+        except ValueError:
             value = None
         self.set_model_attr('quantity', value)
         if value is None:
@@ -755,8 +827,8 @@ class PlantEditorPresenter(GenericEditorPresenter):
         else:
             # remove_problem() won't complain if problem doesn't exist
             self.remove_problem(self.PROBLEM_DUPLICATE_PLANT_CODE, entry)
-            entry.modify_bg(gtk.STATE_NORMAL, None)
-            entry.modify_base(gtk.STATE_NORMAL, None)
+            entry.modify_bg(Gtk.STATE_NORMAL, None)
+            entry.modify_base(Gtk.STATE_NORMAL, None)
             entry.queue_draw()
 
         self.refresh_sensitivity()
@@ -874,10 +946,10 @@ class PlantEditor(GenericModelViewPresenterEditor):
         self.presenter = PlantEditorPresenter(self.model, view)
 
         # add quick response keys
-        self.attach_response(view.get_window(), gtk.RESPONSE_OK, 'Return',
-                             gtk.gdk.CONTROL_MASK)
+        self.attach_response(view.get_window(), Gtk.ResponseType.OK, 'Return',
+                             Gdk.CONTROL_MASK)
         self.attach_response(view.get_window(), self.RESPONSE_NEXT, 'n',
-                             gtk.gdk.CONTROL_MASK)
+                             Gdk.CONTROL_MASK)
 
         # set default focus
         if self.model.accession is None:
@@ -966,7 +1038,7 @@ class PlantEditor(GenericModelViewPresenterEditor):
 
     def handle_response(self, response):
         not_ok_msg = _('Are you sure you want to lose your changes?')
-        if response == gtk.RESPONSE_OK or response in self.ok_responses:
+        if response == Gtk.ResponseType.OK or response in self.ok_responses:
             try:
                 if self.presenter.dirty():
                     # commit_changes() will append the commited plants
@@ -975,7 +1047,7 @@ class PlantEditor(GenericModelViewPresenterEditor):
             except DBAPIError, e:
                 exc = traceback.format_exc()
                 msg = _('Error committing changes.\n\n%s') % e.orig
-                utils.message_details_dialog(msg, str(e), gtk.MESSAGE_ERROR)
+                utils.message_details_dialog(msg, str(e), Gtk.MessageType.ERROR)
                 self.session.rollback()
                 return False
             except Exception, e:
@@ -984,7 +1056,7 @@ class PlantEditor(GenericModelViewPresenterEditor):
                     % utils.xml_safe_utf8(e)
                 debug(traceback.format_exc())
                 utils.message_details_dialog(msg, traceback.format_exc(),
-                                             gtk.MESSAGE_ERROR)
+                                             Gtk.MessageType.ERROR)
                 self.session.rollback()
                 return False
         elif (self.presenter.dirty() and utils.yes_no_dialog(not_ok_msg)) \
@@ -1074,7 +1146,7 @@ class GeneralPlantExpander(InfoExpander):
         super(GeneralPlantExpander, self).__init__(_("General"), widgets)
         general_box = self.widgets.general_box
         self.widgets.remove_parent(general_box)
-        self.vbox.pack_start(general_box)
+        self.vbox.pack_start(general_box, True, True, 0)
         self.current_obj = None
 
         def on_acc_code_clicked(*args):
@@ -1118,10 +1190,10 @@ class GeneralPlantExpander(InfoExpander):
         self.set_widget_value('type_data', acc_type_values[row.acc_type],
                               False)
 
-        image_size = gtk.ICON_SIZE_MENU
-        stock = gtk.STOCK_NO
+        image_size = Gtk.ICON_SIZE_MENU
+        stock = Gtk.STOCK_NO
         if row.memorial:
-            stock = gtk.STOCK_YES
+            stock = Gtk.STOCK_YES
         self.widgets.memorial_image.set_from_stock(stock, image_size)
 
 
@@ -1135,11 +1207,10 @@ class ChangesExpander(InfoExpander):
         """
         super(ChangesExpander, self).__init__(_('Changes'), widgets)
         self.vbox.props.spacing = 5
-        self.table = gtk.Table()
-        self.vbox.pack_start(self.table, expand=False, fill=False)
+        self.table = Gtk.Table()
+        self.vbox.pack_start(self.table, False, False, 0)
         self.table.props.row_spacing = 3
         self.table.props.column_spacing = 5
-
 
     def update(self, row):
         '''
@@ -1172,10 +1243,10 @@ class ChangesExpander(InfoExpander):
 
         for change in sorted(row.changes, cmp=_cmp, reverse=True):
             date = change.date.strftime(date_format)
-            label = gtk.Label('%s:' % date)
+            label = Gtk.Label('%s:' % date)
             label.set_alignment(0, 0)
             self.table.attach(label, 0, 1, current_row, current_row+1,
-                              xoptions=gtk.FILL)
+                              xoptions=Gtk.FILL)
             if change.to_location and change.from_location:
                 s = '%(quantity)s Transferred from %(from_loc)s to %(to)s' % \
                     dict(quantity=change.quantity,
@@ -1192,21 +1263,21 @@ class ChangesExpander(InfoExpander):
                                       change.to_location)
             if change.reason is not None:
                 s += '\n%s' % change_reasons[change.reason]
-            label = gtk.Label(s)
+            label = Gtk.Label(s)
             label.set_alignment(0, .5)
             self.table.attach(label, 1, 2, current_row, current_row+1,
-                              xoptions=gtk.FILL)
+                              xoptions=Gtk.FILL)
             current_row += 1
             if change.parent_plant:
                 s = _('<i>Branched from %(plant)s</i>') % \
                     dict(plant=utils.xml_safe_utf8(change.parent_plant))
-                label = gtk.Label()
+                label = Gtk.Label()
                 label.set_alignment(0, .5)
                 label.set_markup(s)
-                eb = gtk.EventBox()
+                eb = Gtk.EventBox()
                 eb.add(label)
                 self.table.attach(eb, 1, 2, current_row, current_row+1,
-                                  xoptions=gtk.FILL)
+                                  xoptions=Gtk.FILL)
 
                 def on_clicked(widget, event, parent):
                     select_in_search_results(parent)
@@ -1241,11 +1312,11 @@ class PropagationExpander(InfoExpander):
         for prop in row.propagations:
             s = '<b>%s</b>: %s' % (prop.date.strftime(format),
                                    prop.get_summary())
-            label = gtk.Label()
+            label = Gtk.Label()
             label.set_markup(s)
             label.props.wrap = True
             label.set_alignment(0.0, 0.5)
-            self.vbox.pack_start(label)
+            self.vbox.pack_start(label, True, True, 0)
         self.vbox.show_all()
 
 

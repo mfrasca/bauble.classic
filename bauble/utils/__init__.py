@@ -10,7 +10,7 @@ import re
 import textwrap
 import xml.sax.saxutils as saxutils
 
-import gtk
+from gi.repository import Gtk, Gdk, GObject
 
 from bauble.i18n import _
 import bauble
@@ -59,8 +59,8 @@ def load_widgets(filename):
 
 class BuilderLoader(object):
     """
-    This class caches the gtk.Builder objects so that loading the same
-    file with the same name returns the same gtk.Builder.
+    This class caches the Gtk.Builder objects so that loading the same
+    file with the same name returns the same Gtk.Builder.
 
     It might seem crazy to keep them around instead of deleting them
     and freeing the memory but in reality the memory is never returned
@@ -69,9 +69,9 @@ class BuilderLoader(object):
     several times.  e.g. everytime you open an editor or infobox
     """
     # NOTE: this builder loader is really only used because of a bug
-    # in PyGTK where a gtk.Builder doesn't free some memory so we use
+    # in PyGTK where a Gtk.Builder doesn't free some memory so we use
     # this to keep the memory from growing out of control. if the
-    # gtk/pygtk people fix that bug we should be able to get rid of
+    # Gtk/pyGtk people fix that bug we should be able to get rid of
     # this class
     # http://bugzilla.gnome.org/show_bug.cgi?id=589057,560822
 
@@ -83,7 +83,7 @@ class BuilderLoader(object):
         """
         if filename in cls.builders.keys():
             return cls.builders[filename]
-        b = gtk.Builder()
+        b = Gtk.Builder()
         b.add_from_file(filename)
         b.set_translation_domain('bauble')
         cls.builders[filename] = b
@@ -93,15 +93,15 @@ class BuilderLoader(object):
 class BuilderWidgets(dict):
     """
     Provides dictionary and attribute access for a
-    :class:`gtk.Builder` object.
+    :class:`Gtk.Builder` object.
     """
 
     def __init__(self, ui):
         '''
-        :params filename: a gtk.Builder XML UI file
+        :params filename: a Gtk.Builder XML UI file
         '''
         if isinstance(ui, basestring):
-            self.builder = gtk.Builder()
+            self.builder = Gtk.Builder()
             self.builder.add_from_file(ui)
         else:
             self.builder = ui
@@ -150,19 +150,20 @@ def tree_model_has(tree, value):
 
 def search_tree_model(parent, data, cmp=lambda row, data: row[0] == data):
     """
-    Return a iterable of gtk.TreeIter instances to all occurences
+    Return a iterable of Gtk.TreeIter instances to all occurences
     of data in model
 
-    :param parent: a gtk.TreeModel or a gtk.TreeModelRow instance
+    :param parent: a Gtk.TreeModel or a Gtk.TreeModelRow instance
     :param data: the data to look for
     :param cmp: the function to call on each row to check if it matches
      data, default is C{lambda row, data: row[0] == data}
     """
-    if isinstance(parent, gtk.TreeModel):
-        if not parent.get_iter_root(): # model empty
+    if isinstance(parent, Gtk.TreeModel):
+        if not parent.get_iter_root():  # model empty
             return []
         return search_tree_model(parent[parent.get_iter_root()], data, cmp)
     results = set()
+
     def func(model, path, iter, dummy=None):
         if cmp(model[iter], data):
             #debug('add: %s' % model[iter])
@@ -174,7 +175,7 @@ def search_tree_model(parent, data, cmp=lambda row, data: row[0] == data):
 
 def clear_model(obj_with_model):
     """
-    :param obj_with_model: a gtk Widget that has a gtk.TreeModel that
+    :param obj_with_model: a Gtk Widget that has a Gtk.TreeModel that
       can be retrieved with obj_with_mode.get_model
 
     Remove the model from the object, deletes all the items in the
@@ -189,7 +190,7 @@ def clear_model(obj_with_model):
 
     def del_cb(model, path, iter, data=None):
         for c in xrange(0, ncols):
-            v =  model.get_value(iter, c)
+            v = model.get_value(iter, c)
             del v
         del iter
     model.foreach(del_cb)
@@ -226,7 +227,7 @@ def set_combo_from_value(combo, value, cmp=lambda row, value: row[0] == value):
 
 def combo_get_value_iter(combo, value, cmp=lambda row, value: row[0] == value):
     '''
-    Returns a gtk.TreeIter that points to first matching value in the
+    Returns a Gtk.TreeIter that points to first matching value in the
     combo's model.
 
     :param combo: the combo where we should search
@@ -246,7 +247,7 @@ def combo_get_value_iter(combo, value, cmp=lambda row, value: row[0] == value):
 
 def set_widget_value(widget, value, markup=False, default=None, index=0):
     '''
-    :param widget: an instance of gtk.Widget
+    :param widget: an instance of Gtk.Widget
     :param value: the value to put in the widget
     :param markup: whether or not value is markup
     :param default: the default value to put in the widget if the value is None
@@ -257,8 +258,8 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
     '''
 
     if value is None:  # set the value from the default
-        if isinstance(widget, (gtk.Label, gtk.TextView, gtk.Entry)) \
-               and default is None:
+        if isinstance(widget, (Gtk.Label, Gtk.TextView, Gtk.Entry))\
+                and default is None:
             value = ''
         else:
             value = default
@@ -270,7 +271,7 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
         date_format = prefs.prefs[prefs.date_format_pref]
         value = value.strftime(date_format)
 
-    if isinstance(widget, gtk.Label):
+    if isinstance(widget, Gtk.Label):
         #widget.set_text(str(value))
         # FIXME: some of the enum values that have <not set> as a values
         # will give errors here, but we can't escape the string because
@@ -283,12 +284,12 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
             widget.set_markup(utf8(value))
         else:
             widget.set_text(utf8(value))
-    elif isinstance(widget, gtk.TextView):
+    elif isinstance(widget, Gtk.TextView):
         widget.get_buffer().set_text(str(value))
-    elif isinstance(widget, gtk.Entry):
+    elif isinstance(widget, Gtk.Entry):
         widget.set_text(utf8(value))
-    elif isinstance(widget, gtk.ComboBox):
-        # handles gtk.ComboBox and gtk.ComboBoxEntry
+    elif isinstance(widget, Gtk.ComboBox):
+        # handles Gtk.ComboBox and Gtk.ComboBoxEntry
         treeiter = None
         if not widget.get_model():
             pass
@@ -296,15 +297,15 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
             #             'combo doesn\'t have a model: %s' % widget.get_name())
         else:
             treeiter = combo_get_value_iter(widget, value,
-                                  cmp = lambda row, value: row[index] == value)
+                                  cmp=lambda row, value: row[index] == value)
             if treeiter:
                 widget.set_active_iter(treeiter)
             else:
                 widget.set_active(-1)
-        if isinstance(widget, gtk.ComboBoxEntry):
+        if isinstance(widget, Gtk.ComboBoxEntry):
             widget.child.props.text = value or ''
     elif isinstance(widget,
-                    (gtk.ToggleButton, gtk.CheckButton, gtk.RadioButton)):
+                    (Gtk.ToggleButton, Gtk.CheckButton, Gtk.RadioButton)):
         if value is True:
             widget.set_inconsistent(False)
             widget.set_active(True)
@@ -313,7 +314,7 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
             widget.set_active(False)
         else:
             widget.set_inconsistent(True)
-    elif isinstance(widget, gtk.Button):
+    elif isinstance(widget, Gtk.Button):
         if value is None:
             widget.props.label = ''
         else:
@@ -322,38 +323,47 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
     else:
         raise TypeError('utils.set_widget_value(): Don\'t know how to handle '
                         'the widget type %s with name %s' %
-                        (type(w), widget_name))
+                        (type(widget), widget.get_name()))
 
 
-def create_message_dialog(msg, type=gtk.MESSAGE_INFO, buttons=gtk.BUTTONS_OK,
+def get_approximate_char_width(widget):
+    try:
+        # get the width of a character
+        context = widget.get_pango_context()
+        font_metrics = context.get_metrics(
+            context.get_font_description(), context.get_language())
+        width = font_metrics.get_approximate_char_width()
+    except:
+        width = 16
+    return width
+
+
+def create_message_dialog(msg, type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK,
                           parent=None):
     '''
     Create a message dialog.
 
     :param msg: The markup to use for the message. The value should be
       escaped in case it contains any HTML entities.
-    :param type: A GTK message type constant.  The default is gtk.MESSAGE_INFO.
+    :param type: A GTK message type constant.  The default is Gtk.MessageType.INFO.
     :param buttons: A GTK buttons type constant.  The default is
-      gtk.BUTTONS_OK.
+      Gtk.ButtonsType.OK.
     :param parent:  The parent window for the dialog
 
-    Returns a :class:`gtk.MessageDialog`
+    Returns a :class:`Gtk.MessageDialog`
     '''
     if parent is None:
-        try: # this might get called before bauble has started
+        try:  # this might get called before bauble has started
             parent = bauble.gui.window
         except Exception:
             parent = None
-    d =gtk.MessageDialog(flags=gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
-                         parent=parent, type=type, buttons=buttons)
+    d = Gtk.MessageDialog(
+        flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+        parent=parent, type=type, buttons=buttons)
     d.set_title('Bauble')
     d.set_markup(msg)
 
-    # get the width of a character
-    context = d.get_pango_context()
-    font_metrics = context.get_metrics(context.get_font_description(),
-                                       context.get_language())
-    width = font_metrics.get_approximate_char_width()
+    width = get_approximate_char_width(d)
     import pango
     # if the character width is less than 300 pixels then set the
     # message dialog's label to be 300 to avoid tiny dialogs
@@ -362,12 +372,12 @@ def create_message_dialog(msg, type=gtk.MESSAGE_INFO, buttons=gtk.BUTTONS_OK,
         # means..should we set the width with markup???
         #
         #./bauble/utils/__init__.py:347: DeprecationWarning: use
-        #set_markup() instead  d.label.set_size_request(300, -1)
+        #set_markup() instead
         d.label.set_size_request(300, -1)
 
     if d.get_icon() is None:
         try:
-            pixbuf = gtk.gdk.pixbuf_new_from_file(bauble.default_icon)
+            pixbuf = Gdk.pixbuf_new_from_file(bauble.default_icon)
             d.set_icon(pixbuf)
         except Exception:
             pass
@@ -376,7 +386,7 @@ def create_message_dialog(msg, type=gtk.MESSAGE_INFO, buttons=gtk.BUTTONS_OK,
     return d
 
 
-def message_dialog(msg, type=gtk.MESSAGE_INFO, buttons=gtk.BUTTONS_OK,
+def message_dialog(msg, type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK,
                    parent=None):
     '''
     Create a message dialog with :func:`bauble.utils.create_message_dialog`
@@ -395,18 +405,19 @@ def create_yes_no_dialog(msg, parent=None):
     Create a dialog with yes/no buttons.
     """
     if parent is None:
-        try: # this might get called before bauble has started
+        try:  # this might get called before bauble has started
             parent = bauble.gui.window
         except Exception:
             parent = None
-    d =gtk.MessageDialog(flags=gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
-                         parent=parent, type=gtk.MESSAGE_QUESTION,
-                         buttons = gtk.BUTTONS_YES_NO)
+    d = Gtk.MessageDialog(flags=Gtk.DialogType.MODAL |
+                          Gtk.DialogType.DESTROY_WITH_PARENT,
+                          parent=parent, type=Gtk.MessageType.QUESTION,
+                          buttons=Gtk.ButtonsType.YES_NO)
     d.set_title('Bauble')
     d.set_markup(msg)
     if d.get_icon() is None:
         try:
-            pixbuf = gtk.gdk.pixbuf_new_from_file(bauble.default_icon)
+            pixbuf = Gdk.pixbuf_new_from_file(bauble.default_icon)
             d.set_icon(pixbuf)
         except Exception:
             pass
@@ -419,7 +430,7 @@ def yes_no_dialog(msg, parent=None, yes_delay=-1):
     """
     Create and run a yes/no dialog.
 
-    Return True if the dialog response equals gtk.RESPONSE_YES
+    Return True if the dialog response equals Gtk.ResponseType.YES
 
     :param msg: the message to display in the dialog
     :param parent: the dialog's parent
@@ -428,64 +439,63 @@ def yes_no_dialog(msg, parent=None, yes_delay=-1):
     """
     d = create_yes_no_dialog(msg, parent)
     if yes_delay > 0:
-        d.set_response_sensitive(gtk.RESPONSE_YES, False)
+        d.set_response_sensitive(Gtk.ResponseType.YES, False)
+
         def on_timeout():
-            if d.get_property('visible'): # conditional avoids GTK+ warning
-                d.set_response_sensitive(gtk.RESPONSE_YES, True)
+            if d.get_property('visible'):  # conditional avoids GTK+ warning
+                d.set_response_sensitive(Gtk.ResponseType.YES, True)
             return False
-        import gobject
-        gobject.timeout_add(yes_delay*1000, on_timeout)
+        from gi.repository import GObject
+        GObject.timeout_add(yes_delay*1000, on_timeout)
     r = d.run()
     d.destroy()
-    return r == gtk.RESPONSE_YES
+    return r == Gtk.ResponseType.YES
 
 
-
-def create_message_details_dialog(msg, details, type=gtk.MESSAGE_INFO,
-                                  buttons=gtk.BUTTONS_OK, parent=None):
+def create_message_details_dialog(msg, details, type=Gtk.MessageType.INFO,
+                                  buttons=Gtk.ButtonsType.OK, parent=None):
     '''
     Create a message dialog with a details expander.
     '''
     if parent is None:
-        try: # this might get called before bauble has started
+        try:  # this might get called before bauble has started
             parent = bauble.gui.window
         except Exception:
             parent = None
 
-    d = gtk.MessageDialog(flags=gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
-                          parent=parent,type=type, buttons=buttons)
+    d = Gtk.MessageDialog(
+        flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+        parent=parent, type=type, buttons=buttons)
     d.set_title('Bauble')
     d.set_markup(msg)
 
     # get the width of a character
-    context = d.get_pango_context()
-    font_metrics = context.get_metrics(context.get_font_description(),
-                                       context.get_language())
-    width = font_metrics.get_approximate_char_width()
+    width = get_approximate_char_width(d)
     import pango
     # if the character width is less than 300 pixels then set the
     # message dialog's label to be 300 to avoid tiny dialogs
     if width/pango.SCALE*len(msg) < 300:
         d.set_size_request(300, -1)
 
-    expand = gtk.Expander(_("Details"))
-    text_view = gtk.TextView()
+    expand = Gtk.Expander()
+    expand.set_label(_("Details"))
+    text_view = Gtk.TextView()
     text_view.set_editable(False)
-    text_view.set_wrap_mode(gtk.WRAP_WORD)
-    tb = gtk.TextBuffer()
+    text_view.set_wrap_mode(Gtk.WrapMode.WORD)
+    tb = Gtk.TextBuffer()
     tb.set_text(details)
     text_view.set_buffer(tb)
-    sw = gtk.ScrolledWindow()
-    sw.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+    sw = Gtk.ScrolledWindow()
+    sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
     sw.set_size_request(-1, 200)
     sw.add(text_view)
     expand.add(sw)
-    d.vbox.pack_start(expand)
+    d.vbox.pack_start(expand, True, True, 0)
     # make "OK" the default response
-    d.set_default_response(gtk.RESPONSE_OK)
+    d.set_default_response(Gtk.ResponseType.OK)
     if d.get_icon() is None:
         try:
-            pixbuf = gtk.gdk.pixbuf_new_from_file(bauble.default_icon)
+            pixbuf = Gdk.pixbuf_new_from_file(bauble.default_icon)
             d.set_icon(pixbuf)
         except Exception:
             pass
@@ -495,8 +505,8 @@ def create_message_details_dialog(msg, details, type=gtk.MESSAGE_INFO,
     return d
 
 
-def message_details_dialog(msg, details, type=gtk.MESSAGE_INFO,
-                           buttons=gtk.BUTTONS_OK, parent=None):
+def message_details_dialog(msg, details, type=Gtk.MessageType.INFO,
+                           buttons=Gtk.ButtonsType.OK, parent=None):
     '''
     Create and run a message dialog with a details expander.
     '''
@@ -508,49 +518,49 @@ def message_details_dialog(msg, details, type=gtk.MESSAGE_INFO,
 
 def setup_text_combobox(combo, values=None, cell_data_func=None):
     """
-    Configure a gtk.ComboBox as a text combobox
+    Configure a Gtk.ComboBox as a text combobox
 
     NOTE: If you pass a cell_data_func that is a method of an object that
     holds a reference to combo then the object will not be properly
     garbage collected.  To avoid this problem either don't pass a
     method of object or make the method static
 
-    :param combo: gtk.ComboBox
-    :param values: list vales or gtk.ListStore
+    :param combo: Gtk.ComboBox
+    :param values: list vales or Gtk.ListStore
     :param cell_date_func:
     """
     combo.clear()
-    if isinstance(values, gtk.ListStore):
+    if isinstance(values, Gtk.ListStore):
         model = values
     else:
         if values is None:
             values = []
-        model = gtk.ListStore(str)
+        model = Gtk.ListStore(str)
         map(lambda v: model.append([v]), values)
 
     combo.clear()
     combo.set_model(model)
-    renderer = gtk.CellRendererText()
+    renderer = Gtk.CellRendererText()
     combo.pack_start(renderer, True)
     combo.add_attribute(renderer, 'text', 0)
 
     if cell_data_func:
         combo.set_cell_data_func(renderer, cell_data_func)
 
-    if not isinstance(combo, gtk.ComboBoxEntry):
+    if not isinstance(combo, (Gtk.CellRendererText, Gtk.CellRendererPixbuf)):
         return
 
     # enables things like scrolling through values with keyboard and
     # other goodies
     combo.props.text_column = 0
 
-    # if combo is a gtk.ComboBoxEntry then setup completions
+    # if combo is a Gtk.ComboBoxEntry then setup completions
     def compl_cell_data_func(col, cell, model, treeiter, data=None):
         cell.props.text = utf8(model[treeiter][0])
-    completion = gtk.EntryCompletion()
+    completion = Gtk.EntryCompletion()
     completion.set_model(model)
-    cell = gtk.CellRendererText() # set up the completion renderer
-    completion.pack_start(cell)
+    cell = Gtk.CellRendererText() # set up the completion renderer
+    completion.pack_start(cell, True, True, 0)
     completion.set_cell_data_func(cell, compl_cell_data_func)
     completion.props.text_column = 0
     combo.child.set_completion(completion)
@@ -616,7 +626,7 @@ def setup_date_button(view, entry, button, date_func=None):
     if isinstance(button, basestring):
         button = view.widgets[button]
     icon = os.path.join(paths.lib_dir(), 'images', 'calendar.png')
-    image = gtk.Image()
+    image = Gtk.Image()
     image.set_from_file(icon)
     button.set_tooltip_text(_("Today's date"))
     button.set_image(image)
@@ -779,27 +789,27 @@ def reset_sequence(column):
 
 def make_label_clickable(label, on_clicked, *args):
     """
-    :param label: a gtk.Label that has a gtk.EventBox as its parent
+    :param label: a Gtk.Label that has a Gtk.EventBox as its parent
     :param on_clicked: callback to be called when the label is clicked
       on_clicked(label, event, data)
     """
     eventbox = label.parent
 
     check(eventbox is not None, 'label must have a parent')
-    check(isinstance(eventbox, gtk.EventBox),
-          'label must have an gtk.EventBox as its parent')
+    check(isinstance(eventbox, Gtk.EventBox),
+          'label must have an Gtk.EventBox as its parent')
     label.__pressed = False
     def on_enter_notify(*args):
-        label.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse("blue"))
+        label.modify_fg(Gtk.STATE_NORMAL, Gdk.color_parse("blue"))
     def on_leave_notify(*args):
-        label.modify_fg(gtk.STATE_NORMAL, None)
+        label.modify_fg(Gtk.STATE_NORMAL, None)
         label.__pressed = False
     def on_press(*args):
         label.__pressed = True
     def on_release(widget, event, *args):
         if label.__pressed:
             label.__pressed = False
-            label.modify_fg(gtk.STATE_NORMAL, None)
+            label.modify_fg(Gtk.STATE_NORMAL, None)
             on_clicked(label, event, *args)
     eventbox.connect('enter_notify_event', on_enter_notify)
     eventbox.connect('leave_notify_event', on_leave_notify)
@@ -986,16 +996,15 @@ def topological_sort(items, partial_order):
     return sorted
 
 
-class GenericMessageBox(gtk.EventBox):
+class GenericMessageBox(Gtk.EventBox):
     """
     Abstract class for showing a message box at the top of an editor.
     """
     def __init__(self):
         super(GenericMessageBox, self).__init__()
-        self.box = gtk.HBox()
+        self.box = Gtk.HBox()
         self.box.set_spacing(10)
         self.add(self.box)
-
 
     def set_color(self, attr, state, color):
         colormap = self.get_colormap()
@@ -1007,16 +1016,13 @@ class GenericMessageBox(gtk.EventBox):
         self.set_style(style)
         return style
 
-
     def show_all(self):
         self.get_parent().show_all()
         width, height = self.size_request()
         self.set_size_request(width, height+10)
 
-
     def show(self):
         self.show_all()
-
 
     def animate(self):
         return
@@ -1025,6 +1031,7 @@ class GenericMessageBox(gtk.EventBox):
         self.set_size_request(width, 0)
         import time
         self.last_time = time.time()
+
         def _animate_cb(final_height):
             height = 0
             while height < final_height:
@@ -1032,13 +1039,12 @@ class GenericMessageBox(gtk.EventBox):
                 height = height + 1
                 self.set_size_request(width, height)
                 self.queue_resize()
-                while gtk.events_pending():
-                    gtk.main_iteration(False)
+                while Gtk.events_pending():
+                    Gtk.main_iteration(False)
             debug('return False')
             return False
-        #gobject.timeout_add(8, _animate_cb, height)
-        gobject.idle_add(_animate_cb, height)
-
+        #GObject.timeout_add(8, _animate_cb, height)
+        GObject.idle_add(_animate_cb, height)
 
 
 class MessageBox(GenericMessageBox):
@@ -1048,34 +1054,35 @@ class MessageBox(GenericMessageBox):
 
     def __init__(self, msg=None, details=None):
         super(MessageBox, self).__init__()
-        self.vbox = gtk.VBox()
-        self.box.pack_start(self.vbox)
+        self.vbox = Gtk.VBox()
+        self.box.pack_start(self.vbox, True, True, 0)
 
-        self.label = gtk.Label()
+        self.label = Gtk.Label()
         self.label.set_padding(8, 8)
         self.label.set_alignment(0, 0)
         if msg:
             self.label.set_markup(msg)
-        self.vbox.pack_start(self.label, expand=True, fill=True)
+        self.vbox.pack_start(self.label, True, True, 0)
 
-        button_box = gtk.VBox()
-        self.box.pack_start(button_box, expand=False, fill=False)
-        button = gtk.Button()
-        image = gtk.Image()
-        image.set_from_stock(gtk.STOCK_CLOSE, gtk.ICON_SIZE_BUTTON)
+        button_box = Gtk.VBox()
+        self.box.pack_start(button_box, False, False, 0)
+        button = Gtk.Button()
+        image = Gtk.Image()
+        image.set_from_stock(Gtk.STOCK_CLOSE, Gtk.ICON_SIZE_BUTTON)
         button.props.image = image
-        button.set_relief(gtk.RELIEF_NONE)
-        button_box.pack_start(button, expand=False, fill=False)
+        button.set_relief(Gtk.RELIEF_NONE)
+        button_box.pack_start(button, False, False, 0)
 
-        self.details_expander = gtk.Expander(_('Show details'))
-        self.vbox.pack_start(self.details_expander)
+        self.details_expander = Gtk.Expander()
+        self.details_expander.set_label(_('Show details'))
+        self.vbox.pack_start(self.details_expander, True, True, 0)
 
-        sw = gtk.ScrolledWindow()
+        sw = Gtk.ScrolledWindow()
         sw.set_size_request(-1, 200)
-        sw.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-        viewport = gtk.Viewport()
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        viewport = Gtk.Viewport()
         sw.add(viewport)
-        self.details_label = gtk.Label()
+        self.details_label = Gtk.Label()
         viewport.add(self.details_label)
 
         self.details = details
@@ -1093,17 +1100,15 @@ class MessageBox(GenericMessageBox):
                 parent.remove(self)
         button.connect('clicked', on_close, True)
 
-        colors = [('bg', gtk.STATE_NORMAL, '#FFFFFF'),
-                  ('bg', gtk.STATE_PRELIGHT, '#FFFFFF')]
+        colors = [('bg', Gtk.STATE_NORMAL, '#FFFFFF'),
+                  ('bg', Gtk.STATE_PRELIGHT, '#FFFFFF')]
         for color in colors:
             self.set_color(*color)
-
 
     def show_all(self):
         super(MessageBox, self).show_all()
         if not self.details_label.get_text():
             self.details_expander.hide()
-
 
     def _get_message(self, msg):
         return self.label.text
@@ -1143,28 +1148,28 @@ class YesNoMessageBox(GenericMessageBox):
         depending on whether the user selected Yes or No, respectively.
         """
         super(YesNoMessageBox, self).__init__()
-        self.label = gtk.Label()
+        self.label = Gtk.Label()
         if msg:
             self.label.set_markup(msg)
         self.label.set_alignment(.1, .1)
-        self.box.pack_start(self.label, expand=True, fill=True)
+        self.box.pack_start(self.label, True, True, 0)
 
-        button_box = gtk.VBox()
-        self.box.pack_start(button_box, expand=False, fill=False)
-        self.yes_button = gtk.Button(stock=gtk.STOCK_YES)
+        button_box = Gtk.VBox()
+        self.box.pack_start(button_box, False, False, 0)
+        self.yes_button = Gtk.Button(stock=Gtk.STOCK_YES)
         if on_response:
             self.yes_button.connect('clicked', on_response, True)
-        button_box.pack_start(self.yes_button, expand=False, fill=False)
+        button_box.pack_start(self.yes_button, False, False, 0)
 
-        button_box = gtk.VBox()
-        self.box.pack_start(button_box, expand=False, fill=False)
-        self.no_button = gtk.Button(stock=gtk.STOCK_NO)
+        button_box = Gtk.VBox()
+        self.box.pack_start(button_box, False, False, 0)
+        self.no_button = Gtk.Button(stock=Gtk.STOCK_NO)
         if on_response:
             self.no_button.connect('clicked', on_response, False)
-        button_box.pack_start(self.no_button, expand=False, fill=False)
+        button_box.pack_start(self.no_button, False, False, 0)
 
-        colors = [('bg', gtk.STATE_NORMAL, '#FFFFFF'),
-                  ('bg', gtk.STATE_PRELIGHT, '#FFFFFF')]
+        colors = [('bg', Gtk.STATE_NORMAL, '#FFFFFF'),
+                  ('bg', Gtk.STATE_PRELIGHT, '#FFFFFF')]
         for color in colors:
             self.set_color(*color)
 
@@ -1191,7 +1196,7 @@ MESSAGE_BOX_YESNO = 3
 
 def add_message_box(parent, type=MESSAGE_BOX_INFO):
     """
-    :param parent: the parent :class:`gtk.Box` width to add the
+    :param parent: the parent :class:`Gtk.Box` width to add the
       message box to
     :param type: one of MESSAGE_BOX_INFO, MESSAGE_BOX_ERROR or
       MESSAGE_BOX_YESNO
@@ -1206,7 +1211,7 @@ def add_message_box(parent, type=MESSAGE_BOX_INFO):
         msg_box = YesNoMessageBox()
     else:
         raise ValueError('unknown message box type: %s' % type)
-    parent.pack_start(msg_box, expand=True, fill=True)
+    parent.pack_start(msg_box, True, True, 0)
     return msg_box
 
 

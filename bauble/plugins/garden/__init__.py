@@ -113,10 +113,10 @@ def init_location_comboentry(presenter, combo, on_select, required=True):
     def cell_data_func(col, cell, model, treeiter, data=None):
         cell.props.text = utils.utf8(model[treeiter][0])
 
-    import gtk
-    completion = gtk.EntryCompletion()
-    cell = gtk.CellRendererText() # set up the completion renderer
-    completion.pack_start(cell)
+    from gi.repository import Gtk
+    completion = Gtk.EntryCompletion()
+    cell = Gtk.CellRendererText()  # set up the completion renderer
+    completion.pack_start(cell, True, True, 0)
     completion.set_cell_data_func(cell, cell_data_func)
     completion.props.popup_set_width = False
 
@@ -124,11 +124,11 @@ def init_location_comboentry(presenter, combo, on_select, required=True):
     entry.set_completion(completion)
 
     combo.clear()
-    cell = gtk.CellRendererText()
-    combo.pack_start(cell)
+    cell = Gtk.CellRendererText()
+    combo.pack_start(cell, True)
     combo.set_cell_data_func(cell, cell_data_func)
 
-    model = gtk.ListStore(object)
+    model = Gtk.ListStore(object)
     locations = sorted(presenter.session.query(Location).all(),
                        key=lambda loc: utils.natsort_key(loc.code))
     map(lambda loc: model.append([loc]), locations)

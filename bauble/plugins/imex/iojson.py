@@ -19,7 +19,7 @@
 
 import os
 from json import load, dump
-import gtk
+from gi.repository import Gtk
 import bauble.utils as utils
 import bauble.db as db
 from bauble.plugins.plants import Familia, Genus, Species
@@ -87,14 +87,14 @@ class JSONExporter(object):
 
     def start(self, filename=None, objects=None):
         if filename is None: # no filename, ask the user
-            d = gtk.FileChooserDialog(_("Choose a file to export to..."), None,
-                                      gtk.FILE_CHOOSER_ACTION_SAVE,
-                                      (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT,
-                                       gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL))
+            d = Gtk.FileChooserDialog(_("Choose a file to export to..."), None,
+                                      Gtk.FileChooserAction.SAVE,
+                                      (Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT,
+                                       Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL))
             response = d.run()
             filename = d.get_filename()
             d.destroy()
-            if response != gtk.RESPONSE_ACCEPT or filename == None:
+            if response != Gtk.ResponseType.ACCEPT or filename == None:
                 return
         self.run(filename, objects)
 

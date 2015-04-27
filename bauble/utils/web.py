@@ -14,7 +14,7 @@
 # along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 
 
-import gtk
+from gi.repository import Gtk
 
 import bauble.utils.desktop as desktop
 
@@ -22,10 +22,10 @@ import bauble.utils.desktop as desktop
 def _open_link(func, data=None):
     desktop.open(data)
 
-gtk.link_button_set_uri_hook(_open_link)
+## Gtk.LinkButton.set_uri_hook(_open_link)
 
 
-class StringLinkButton(gtk.LinkButton):
+class StringLinkButton(Gtk.LinkButton):
 
     _base_uri = "%s"
     _space = "_"
@@ -42,7 +42,7 @@ class StringLinkButton(gtk.LinkButton):
         self.set_uri(self._base_uri % s.replace(' ', self._space))
 
 
-class KeywordsLinkButton(gtk.LinkButton):
+class KeywordsLinkButton(Gtk.LinkButton):
 
     _base_uri = ""
     _space = "_"

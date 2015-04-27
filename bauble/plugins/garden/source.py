@@ -7,8 +7,9 @@ import traceback
 import weakref
 from random import random
 
-import gtk
-import gobject
+from gi.repository import Gtk
+from gi.repository import Gdk
+from gi.repository import GObject
 
 from sqlalchemy import *
 from sqlalchemy.orm import *
@@ -81,7 +82,7 @@ def source_detail_remove_callback(details):
     except Exception, e:
         msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
         utils.message_details_dialog(msg, traceback.format_exc(),
-                                     type=gtk.MESSAGE_ERROR)
+                                     type=Gtk.MessageType.ERROR)
     finally:
         session.close()
     return True
@@ -338,10 +339,10 @@ class SourceDetailEditor(editor.GenericModelViewPresenterEditor):
         self.presenter = SourceDetailEditorPresenter(self.model, view)
 
         # add quick response keys
-        self.attach_response(view.get_window(), gtk.RESPONSE_OK, 'Return',
-                             gtk.gdk.CONTROL_MASK)
+        self.attach_response(view.get_window(), Gtk.ResponseType.OK, 'Return',
+                             Gdk.CONTROL_MASK)
         # self.attach_response(view.get_window(), self.RESPONSE_NEXT, 'n',
-        #                      gtk.gdk.CONTROL_MASK)
+        #                      Gdk.CONTROL_MASK)
 
 
     def handle_response(self, response):
@@ -349,7 +350,7 @@ class SourceDetailEditor(editor.GenericModelViewPresenterEditor):
         handle the response from self.presenter.start() in self.start()
         '''
         not_ok_msg = _('Are you sure you want to lose your changes?')
-        if response == gtk.RESPONSE_OK or response in self.ok_responses:
+        if response == Gtk.ResponseType.OK or response in self.ok_responses:
             try:
                 if self.presenter.dirty():
                     self.commit_changes()
@@ -357,14 +358,14 @@ class SourceDetailEditor(editor.GenericModelViewPresenterEditor):
             except DBAPIError, e:
                 msg = _('Error committing changes.\n\n%s' \
                         % utils.xml_safe_utf8(e.orig))
-                utils.message_details_dialog(msg, str(e), gtk.MESSAGE_ERROR)
+                utils.message_details_dialog(msg, str(e), Gtk.MessageType.ERROR)
                 return False
             except Exception, e:
                 msg = _('Unknown error when committing changes. See the '\
                        'details for more information.\n\n%s' \
                        % utils.xml_safe_utf8(e))
                 utils.message_details_dialog(msg, traceback.format_exc(),
-                                             gtk.MESSAGE_ERROR)
+                                             Gtk.MessageType.ERROR)
                 return False
         elif self.presenter.dirty() and utils.yes_no_dialog(not_ok_msg) \
                  or not self.presenter.dirty():
@@ -494,15 +495,15 @@ class CollectionPresenter(editor.ChildPresenter):
             self.geo_menu.popup(None, None, None, event.button, event.time)
         self.view.connect('add_region_button', 'button-press-event',
                           on_add_button_pressed)
+
         def _init_geo():
             add_button = self.view.widgets.add_region_button
             self.geo_menu = GeographyMenu(self.set_region)
             self.geo_menu.attach_to_widget(add_button, None)
             add_button.set_sensitive(True)
-        gobject.idle_add(_init_geo)
+        GObject.idle_add(_init_geo)
 
         self.__dirty = False
-
 
     def set_region(self, menu_item, geo_id):
         geography = self.session.query(Geography).get(geo_id)
@@ -710,7 +711,7 @@ class CollectionPresenter(editor.ChildPresenter):
                 dms_string = u'%s %s\u00B0%s\'%s"' % latitude_to_dms(latitude)
         except Exception:
             # debug(traceback.format_exc())
-            bg_color = gtk.gdk.color_parse("red")
+            bg_color = Gdk.color_parse("red")
             self.add_problem(self.PROBLEM_BAD_LATITUDE,
                              self.view.widgets.lat_entry)
         else:
@@ -745,7 +746,7 @@ class CollectionPresenter(editor.ChildPresenter):
                 dms_string = u'%s %s\u00B0%s\'%s"' % longitude_to_dms(longitude)
         except Exception:
             # debug(traceback.format_exc())
-            bg_color = gtk.gdk.color_parse("red")
+            bg_color = Gdk.color_parse("red")
             self.add_problem(self.PROBLEM_BAD_LONGITUDE,
                               self.view.widgets.lon_entry)
         else:
@@ -824,7 +825,7 @@ class PropagationChooserPresenter(editor.ChildPresenter):
                 treeview.props.sensitive = False
                 return
             utils.clear_model(treeview)
-            model = gtk.ListStore(object)
+            model = Gtk.ListStore(object)
             for propagation in value.propagations:
                 model.append([propagation])
             treeview.set_model(model)
@@ -855,7 +856,7 @@ class PropagationChooserPresenter(editor.ChildPresenter):
             treeview.props.sensitive = False
             return
         utils.clear_model(treeview)
-        model = gtk.ListStore(object)
+        model = Gtk.ListStore(object)
         for propagation in parent_plant.propagations:
             model.append([propagation])
         treeview.set_model(model)
@@ -891,7 +892,7 @@ class GeneralSourceDetailExpander(InfoExpander):
         super(GeneralSourceDetailExpander, self).__init__(_('General'), widgets)
         gen_box = self.widgets.sd_gen_box
         self.widgets.remove_parent(gen_box)
-        self.vbox.pack_start(gen_box)
+        self.vbox.pack_start(gen_box, True, True, 0)
 
 
     def update(self, row):

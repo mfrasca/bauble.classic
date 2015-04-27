@@ -43,7 +43,7 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkComboBox" id="prop_type_combo">
+                          <object class="GtkComboBoxText" id="prop_type_combo">
                             <property name="visible">True</property>
                           </object>
                           <packing>
@@ -189,7 +189,7 @@
                                         <property name="column_spacing">5</property>
                                         <property name="row_spacing">5</property>
                                         <child>
-                                          <object class="GtkComboBox" id="cutting_type_combo">
+                                          <object class="GtkComboBoxText" id="cutting_type_combo">
                                             <property name="visible">True</property>
                                           </object>
                                           <packing>
@@ -231,7 +231,7 @@
                                               </packing>
                                             </child>
                                             <child>
-                                              <object class="GtkComboBox" id="cutting_length_unit_combo">
+                                              <object class="GtkComboBoxText" id="cutting_length_unit_combo">
                                                 <property name="visible">True</property>
                                               </object>
                                               <packing>
@@ -265,7 +265,7 @@
                                           </packing>
                                         </child>
                                         <child>
-                                          <object class="GtkComboBox" id="cutting_leaves_combo">
+                                          <object class="GtkComboBoxText" id="cutting_leaves_combo">
                                             <property name="visible">True</property>
                                           </object>
                                           <packing>
@@ -392,7 +392,7 @@
                                           </packing>
                                         </child>
                                         <child>
-                                          <object class="GtkComboBox" id="cutting_buds_combo">
+                                          <object class="GtkComboBoxText" id="cutting_buds_combo">
                                             <property name="visible">True</property>
                                           </object>
                                           <packing>
@@ -404,7 +404,7 @@
                                           </packing>
                                         </child>
                                         <child>
-                                          <object class="GtkComboBox" id="cutting_wound_combo">
+                                          <object class="GtkComboBoxText" id="cutting_wound_combo">
                                             <property name="visible">True</property>
                                           </object>
                                           <packing>
@@ -416,7 +416,7 @@
                                           </packing>
                                         </child>
                                         <child>
-                                          <object class="GtkComboBox" id="cutting_tip_combo">
+                                          <object class="GtkComboBoxText" id="cutting_tip_combo">
                                             <property name="visible">True</property>
                                           </object>
                                           <packing>
@@ -481,7 +481,7 @@
                                           </packing>
                                         </child>
                                         <child>
-                                          <object class="GtkComboBoxEntry" id="cutting_media_comboentry">
+                                          <object class="GtkEntry" id="cutting_media_comboentry">
                                             <property name="visible">True</property>
                                           </object>
                                           <packing>
@@ -521,7 +521,7 @@
                                               </packing>
                                             </child>
                                             <child>
-                                              <object class="GtkComboBoxEntry" id="cutting_container_comboentry">
+                                              <object class="GtkEntry" id="cutting_container_comboentry">
                                                 <property name="visible">True</property>
                                               </object>
                                               <packing>
@@ -545,7 +545,7 @@
                                               </packing>
                                             </child>
                                             <child>
-                                              <object class="GtkComboBoxEntry" id="cutting_location_comboentry">
+                                              <object class="GtkEntry" id="cutting_location_comboentry">
                                                 <property name="visible">True</property>
                                               </object>
                                               <packing>
@@ -595,7 +595,7 @@
                                                   </packing>
                                                 </child>
                                                 <child>
-                                                  <object class="GtkComboBox" id="cutting_heat_unit_combo">
+                                                  <object class="GtkComboBoxText" id="cutting_heat_unit_combo">
                                                     <property name="visible">True</property>
                                                   </object>
                                                   <packing>
@@ -627,7 +627,7 @@
                                               </packing>
                                             </child>
                                             <child>
-                                              <object class="GtkComboBoxEntry" id="cutting_cover_comboentry">
+                                              <object class="GtkEntry" id="cutting_cover_comboentry">
                                                 <property name="visible">True</property>
                                               </object>
                                               <packing>
@@ -712,7 +712,7 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkComboBoxEntry" id="cutting_fungal_comboentry">
+                                      <object class="GtkEntry" id="cutting_fungal_comboentry">
                                         <property name="visible">True</property>
                                       </object>
                                       <packing>
@@ -722,7 +722,7 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkComboBoxEntry" id="cutting_hormone_comboentry">
+                                      <object class="GtkEntry" id="cutting_hormone_comboentry">
                                         <property name="visible">True</property>
                                       </object>
                                       <packing>
@@ -991,7 +991,7 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkComboBoxEntry" id="seed_container_comboentry">
+                                      <object class="GtkEntry" id="seed_container_comboentry">
                                         <property name="visible">True</property>
                                       </object>
                                       <packing>
@@ -1015,7 +1015,7 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkComboBoxEntry" id="seed_media_comboentry">
+                                      <object class="GtkEntry" id="seed_media_comboentry">
                                         <property name="visible">True</property>
                                       </object>
                                       <packing>
@@ -1039,7 +1039,7 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkComboBoxEntry" id="seed_location_comboentry">
+                                      <object class="GtkEntry" id="seed_location_comboentry">
                                         <property name="visible">True</property>
                                       </object>
                                       <packing>
