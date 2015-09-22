@@ -132,7 +132,7 @@ def load(path=None):
     if errors:
         name = ', '.join(sorted(errors.keys()))
         exc_info = errors.values()[0]
-        exc_str = utils.xml_safe_utf8(exc_info[1])
+        exc_str = utils.xml_safe(exc_info[1])
         tb_str = ''.join(traceback.format_tb(exc_info[2]))
         utils.message_details_dialog('Could not load plugin: '
                                      '\n\n<i>%s</i>\n\n%s'
@@ -193,8 +193,8 @@ def init(force=False):
         if len(not_installed) > 0:
             msg = _('The following plugins were not found in the plugin '
                     'registry:\n\n<b>%s</b>\n\n'
-                    '<i>Would you like to install them now?</i>'
-                    % ', '.join([p.__class__.__name__ for p in not_installed]))
+                    '<i>Would you like to install them now?</i>') % \
+                ', '.join([p.__class__.__name__ for p in not_installed])
             if force or utils.yes_no_dialog(msg):
                 install([p for p in not_installed])
 
@@ -211,8 +211,8 @@ def init(force=False):
 
         if not_registered:
             msg = _('The following plugins are in the registry but '
-                    'could not be loaded:\n\n%(plugins)s' %
-                    {'plugins': utils.utf8(', '.join(sorted(not_registered)))})
+                    'could not be loaded:\n\n%(plugins)s') % \
+                {'plugins': utils.utf8(', '.join(sorted(not_registered)))}
             utils.message_dialog(utils.xml_safe(msg), type=gtk.MESSAGE_WARNING)
 
     except Exception, e:
@@ -249,14 +249,14 @@ def init(force=False):
             logger.error(e)
             ordered.remove(plugin)
             logger.error(traceback.print_exc())
-            safe = utils.xml_safe_utf8
+            safe = utils.xml_safe
             values = dict(entry_name=plugin.__class__.__name__,
                           exception=safe(e))
-            utils.message_details_dialog(_("Error: Couldn't initialize "
-                                           "%(entry_name)s\n\n"
-                                           "%(exception)s." % values),
-                                         traceback.format_exc(),
-                                         gtk.MESSAGE_ERROR)
+            utils.message_details_dialog(
+                _("Error: Couldn't initialize %(entry_name)s\n\n"
+                  "%(exception)s.") % values,
+                traceback.format_exc(),
+                gtk.MESSAGE_ERROR)
 
     # register the plugin commands seperately from the plugin initialization
     for plugin in ordered:
@@ -550,7 +550,7 @@ def _find_plugins(path):
                 mod = __import__(name, globals(), locals(), [name], -1)
             except Exception, e:
                 msg = _('Could not import the %(module)s module.\n\n'
-                        '%(error)s' % {'module': name, 'error': e})
+                        '%(error)s') % {'module': name, 'error': e}
                 logger.debug(msg)
                 errors[name] = sys.exc_info()
         if not hasattr(mod, "plugin"):
@@ -585,6 +585,7 @@ def _find_plugins(path):
             logger.debug('append plugin instance %s:%s' % (name, mod_plugin))
             plugins.append(mod_plugin)
         else:
-            logger.warning(_('%s.plugin is not an instance of pluginmgr.Plugin'
-                           % mod.__name__))
+            logger.warning(
+                _('%s.plugin is not an instance of pluginmgr.Plugin') %
+                mod.__name__)
     return plugins, errors

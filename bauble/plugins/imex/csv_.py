@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2008-2010 Brett Adams
+# Copyright 2012-2015 Mario Frasca <mario@anche.no>.
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 #
 # csv import/export
 #
@@ -238,7 +257,7 @@ class CSVImporter(Importer):
             transaction = connection.begin()
         except Exception, e:
             msg = _('Error connecting to database.\n\n%s') % \
-                utils.xml_safe_utf8(e)
+                utils.xml_safe(e)
             utils.message_dialog(msg, gtk.MESSAGE_ERROR)
             return
 
@@ -248,7 +267,7 @@ class CSVImporter(Importer):
             path, base = os.path.split(f)
             table_name, ext = os.path.splitext(base)
             if table_name in filename_dict:
-                safe = utils.xml_safe_utf8
+                safe = utils.xml_safe
                 values = dict(table_name=safe(table_name),
                               file_name=safe(filename_dict[table_name]),
                               file_name2=safe(f))
@@ -307,8 +326,8 @@ class CSVImporter(Importer):
                     msg = _('In order to import the files the following '
                             'tables will need to be dropped:'
                             '\n\n<b>%s</b>\n\n'
-                            'Would you like to continue?'
-                            % ', '.join(sorted([d.name for d in depends])))
+                            'Would you like to continue?') % \
+                        ', '.join(sorted([d.name for d in depends]))
                     response = utils.yes_no_dialog(msg)
                 else:
                     response = True
@@ -519,7 +538,7 @@ class CSVImporter(Importer):
                 pass
             msg = _('Error: Could not set the sequence for column: %s') \
                 % col_name
-            utils.message_details_dialog(_(utils.xml_safe_utf8(msg)),
+            utils.message_details_dialog(utils.xml_safe(msg),
                                          traceback.format_exc(),
                                          type=gtk.MESSAGE_ERROR)
 
@@ -584,7 +603,7 @@ class CSVExporter(object):
                 return
 
         if not os.path.exists(path):
-            raise ValueError(_("CSVExporter: path does not exist.\n%s" % path))
+            raise ValueError(_("CSVExporter: path does not exist.\n%s") % path)
 
         try:
             # TODO: should we support exporting other metadata

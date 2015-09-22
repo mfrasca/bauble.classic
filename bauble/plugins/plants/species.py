@@ -37,7 +37,7 @@ from bauble.prefs import prefs
 import bauble.utils as utils
 from bauble.plugins.plants.species_editor import (
     SpeciesDistribution, SpeciesEditorPresenter, SpeciesEditorView,
-    SpeciesEditor)
+    SpeciesEditorMenuItem, edit_species)
 from bauble.plugins.plants.species_model import (
     Species, SpeciesNote, VernacularName, SpeciesSynonym,
     DefaultVernacularName)
@@ -46,7 +46,7 @@ from bauble.view import PropertiesExpander, Action
 import bauble.view as view
 
 SpeciesDistribution  # will be imported by clients of this module
-SpeciesEditorPresenter, SpeciesEditorView, SpeciesEditor
+SpeciesEditorPresenter, SpeciesEditorView, SpeciesEditorMenuItem, edit_species,
 DefaultVernacularName
 SpeciesNote
 
@@ -57,12 +57,11 @@ SpeciesNote
 
 
 def edit_callback(values):
-    from bauble.plugins.plants.species_editor import SpeciesEditor
+    from bauble.plugins.plants.species_editor import edit_species
     sp = values[0]
     if isinstance(sp, VernacularName):
         sp = sp.species
-    e = SpeciesEditor(model=sp)
-    return e.start() is not None
+    return edit_species(model=sp) is not None
 
 
 def remove_callback(values):
@@ -75,7 +74,7 @@ def remove_callback(values):
     if isinstance(species, VernacularName):
         species = species.species
     nacc = session.query(Accession).filter_by(species_id=species.id).count()
-    safe_str = utils.xml_safe_utf8(str(species))
+    safe_str = utils.xml_safe(str(species))
     if nacc > 0:
         msg = _('The species <i>%(species)s</i> has %(num_accessions)s '
                 'accessions.  Are you sure you want remove it?') \
@@ -90,7 +89,7 @@ def remove_callback(values):
         session.delete(obj)
         session.commit()
     except Exception, e:
-        msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
+        msg = _('Could not delete.\n\n%s') % utils.xml_safe(e)
         utils.message_details_dialog(msg, traceback.format_exc(),
                                      type=gtk.MESSAGE_ERROR)
     finally:
@@ -128,13 +127,16 @@ def species_markup_func(species):
     '''
     # TODO: add (syn) after species name if there are species synonyms that
     # refer to the id of this plant
-    if len(species.vernacular_names) > 0:
-        substring = '%s -- %s' % \
-                    (species.genus.family,
-                     ', '.join([str(v) for v in species.vernacular_names]))
-    else:
-        substring = '%s' % species.genus.family
-    return species.markup(authors=False), substring
+    try:
+        if len(species.vernacular_names) > 0:
+            substring = '%s -- %s' % \
+                        (species.genus.family,
+                         ', '.join([str(v) for v in species.vernacular_names]))
+        else:
+            substring = '%s' % species.genus.family
+        return species.markup(authors=False), substring
+    except:
+        return u'...', u'...'
 
 
 def species_get_kids(species):
@@ -182,6 +184,7 @@ class SynonymSearch(search.SearchStrategy):
             prefs.save()
 
     def search(self, text, session):
+        from genus import Genus, GenusSynonym
         super(SynonymSearch, self).search(text, session)
         if not prefs[self.return_synonyms_pref]:
             return
@@ -197,6 +200,10 @@ class SynonymSearch(search.SearchStrategy):
                 q = session.query(SpeciesSynonym).\
                     filter_by(synonym_id=result.id)
                 results.extend([syn.species for syn in q])
+            elif isinstance(result, Genus):
+                q = session.query(GenusSynonym).\
+                    filter_by(synonym_id=result.id)
+                results.extend([syn.genus for syn in q])
             elif isinstance(results, VernacularName):
                 q = session.query(SpeciesSynonym).\
                     filter_by(synonym_id=result.species.id)
@@ -238,7 +245,7 @@ class VernacularExpander(InfoExpander):
                 else:
                     names.append('%s - %s' %
                                  (vn.name, vn.language))
-            self.set_widget_value('sp_vernacular_data', '\n'.join(names))
+            self.widget_set_value('sp_vernacular_data', '\n'.join(names))
             self.set_sensitive(True)
             # TODO: get expanded state from prefs
             self.set_expanded(True)
@@ -258,14 +265,36 @@ class SynonymsExpander(InfoExpander):
 
         :param row: the row to get thevalues from
         '''
+        syn_box = self.widgets.sp_synonyms_box
+        # remove old labels
+        syn_box.foreach(syn_box.remove)
         logger.debug(row.synonyms)
-        if len(row.synonyms) == 0:
+        from sqlalchemy.orm.session import object_session
+        self.session = object_session(row)
+        syn = self.session.query(SpeciesSynonym).filter(
+            SpeciesSynonym.synonym_id == row.id).first()
+        accepted = syn and syn.species
+        logger.debug("genus %s is synonym of %s and has synonyms %s" %
+                     (row, accepted, row.synonyms))
+        self.set_label(_("Synonyms"))  # reset default value
+        on_label_clicked = lambda l, e, syn: select_in_search_results(syn)
+        if accepted is not None:
+            self.set_label(_("Accepted name"))
+            # create clickable label that will select the synonym
+            # in the search results
+            box = gtk.EventBox()
+            label = gtk.Label()
+            label.set_alignment(0, .5)
+            label.set_markup(Species.str(accepted, markup=True, authors=True))
+            box.add(label)
+            utils.make_label_clickable(label, on_label_clicked, accepted)
+            syn_box.pack_start(box, expand=False, fill=False)
+            self.show_all()
+            self.set_sensitive(True)
+        elif len(row.synonyms) == 0:
             self.set_sensitive(False)
             self.set_expanded(False)
         else:
-            def on_label_clicked(label, event, syn):
-                select_in_search_results(syn)
-            syn_box = self.widgets.sp_synonyms_box
             # remove all the children
             syn_box.foreach(syn_box.remove)
             for syn in row.synonyms:
@@ -279,7 +308,6 @@ class SynonymsExpander(InfoExpander):
                 utils.make_label_clickable(label, on_label_clicked, syn)
                 syn_box.pack_start(box, expand=False, fill=False)
             self.show_all()
-
             self.set_sensitive(True)
             # TODO: get expanded state from prefs
             self.set_expanded(True)
@@ -332,39 +360,39 @@ class GeneralSpeciesExpander(InfoExpander):
         # around and indent from the genus name instead of from the
         # species name
         session = db.Session()
-        self.set_widget_value('sp_name_data', '<big>%s</big>' %
+        self.widget_set_value('sp_name_data', '<big>%s</big>' %
                               row.markup(True), markup=True)
 
         awards = ''
         if row.awards:
             awards = utils.utf8(row.awards)
-        self.set_widget_value('sp_awards_data', awards)
+        self.widget_set_value('sp_awards_data', awards)
 
         logger.debug('setting cites data from row %s' % row)
         cites = ''
         if row.cites:
             cites = utils.utf8(row.cites)
-        self.set_widget_value('sp_cites_data', cites)
+        self.widget_set_value('sp_cites_data', cites)
 
         # zone = ''
         # if row.hardiness_zone:
         #     awards = utils.utf8(row.hardiness_zone)
-        # self.set_widget_value('sp_hardiness_data', zone)
+        # self.widget_set_value('sp_hardiness_data', zone)
 
         habit = ''
         if row.habit:
             habit = utils.utf8(row.habit)
-        self.set_widget_value('sp_habit_data', habit)
+        self.widget_set_value('sp_habit_data', habit)
 
         dist = ''
         if row.distribution:
             dist = utils.utf8(row.distribution_str())
-        self.set_widget_value('sp_dist_data', dist)
+        self.widget_set_value('sp_dist_data', dist)
 
         dist = ''
         if row.label_distribution:
             dist = row.label_distribution
-        self.set_widget_value('sp_labeldist_data', dist)
+        self.widget_set_value('sp_labeldist_data', dist)
 
         # stop here if not GardenPluin
         if 'GardenPlugin' not in pluginmgr.plugins:
@@ -375,17 +403,17 @@ class GeneralSpeciesExpander(InfoExpander):
 
         nacc = session.query(Accession).join('species').\
             filter_by(id=row.id).count()
-        self.set_widget_value('sp_nacc_data', nacc)
+        self.widget_set_value('sp_nacc_data', nacc)
 
         nplants = session.query(Plant).join('accession', 'species').\
             filter_by(id=row.id).count()
         if nplants == 0:
-            self.set_widget_value('sp_nplants_data', nplants)
+            self.widget_set_value('sp_nplants_data', nplants)
         else:
             nacc_in_plants = session.query(Plant.accession_id).\
                 join('accession', 'species').\
                 filter_by(id=row.id).distinct().count()
-            self.set_widget_value('sp_nplants_data', '%s in %s accessions'
+            self.widget_set_value('sp_nplants_data', '%s in %s accessions'
                                   % (nplants, nacc_in_plants))
         session.close()
 
@@ -425,6 +453,9 @@ class LinksExpander(view.LinksExpander):
         self.tpl_button = web.TPLButton()
         buttons.append(self.tpl_button)
 
+        self.tropicos_button = web.TropicosButton()
+        buttons.append(self.tropicos_button)
+
         for b in buttons:
             b.set_alignment(0, -1)
             self.vbox.pack_start(b, expand=False, fill=False)
@@ -439,6 +470,7 @@ class LinksExpander(view.LinksExpander):
         self.grin_button.set_string(row)
         self.bgci_button.set_keywords(genus=row.genus, species=row.sp)
         self.tpl_button.set_keywords(genus=row.genus, species=row.sp)
+        self.tropicos_button.set_keywords(genus=row.genus, species=row.sp)
 
 
 class SpeciesInfoBox(InfoBox):
@@ -515,5 +547,7 @@ class SpeciesInfoPage(InfoBoxPage):
 class VernacularNameInfoBox(SpeciesInfoBox):
 
     def update(self, row):
-        super(VernacularNameInfoBox, self).update(row.species)
-        #self.props.update(row)
+        logger.info("VernacularNameInfoBox.update %s(%s)" % (
+            row.__class__.__name__, row))
+        if isinstance(row, VernacularName):
+            super(VernacularNameInfoBox, self).update(row.species)

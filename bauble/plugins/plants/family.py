@@ -72,7 +72,7 @@ def remove_callback(families):
     from bauble.plugins.plants.genus import Genus
     session = db.Session()
     ngen = session.query(Genus).filter_by(family_id=family.id).count()
-    safe_str = utils.xml_safe_utf8(str(family))
+    safe_str = utils.xml_safe(str(family))
     if ngen > 0:
         msg = _('The family <i>%(family)s</i> has %(num_genera)s genera.  Are '
                 'you sure you want to remove it?') % dict(family=safe_str,
@@ -87,7 +87,7 @@ def remove_callback(families):
         session.delete(obj)
         session.commit()
     except Exception, e:
-        msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
+        msg = _('Could not delete.\n\n%s') % utils.xml_safe(e)
         utils.message_details_dialog(msg, traceback.format_exc(),
                                      type=gtk.MESSAGE_ERROR)
     finally:
@@ -149,6 +149,7 @@ class Family(db.Base, db.Serializable):
     __mapper_args__ = {'order_by': ['Family.family', 'Family.qualifier']}
 
     rank = 'familia'
+    link_keys = ['accepted']
 
     @validates('genus')
     def validate_stripping(self, key, value):
@@ -162,7 +163,7 @@ class Family(db.Base, db.Serializable):
         '''
 
         cites_notes = [i.note for i in self.notes
-                       if i.category.upper() == 'CITES']
+                       if i.category and i.category.upper() == 'CITES']
         if not cites_notes:
             return None
         return cites_notes[0]
@@ -201,25 +202,47 @@ class Family(db.Base, db.Serializable):
             return ' '.join([s for s in [
                 family.family, family.qualifier] if s not in (None, '')])
 
+    @property
+    def accepted(self):
+        'Name that should be used if name of self should be rejected'
+        session = object_session(self)
+        syn = session.query(FamilySynonym).filter(
+            FamilySynonym.synonym_id == self.id).first()
+        accepted = syn and syn.family
+        return accepted
+
+    @accepted.setter
+    def accepted(self, value):
+        'Name that should be used if name of self should be rejected'
+        assert isinstance(value, self.__class__)
+        if self in value.synonyms:
+            return
+        value.synonyms.append(self)
+
     def has_accessions(self):
         '''true if family is linked to at least one accession
         '''
 
         return False
 
-    def as_dict(self):
+    def as_dict(self, recurse=True):
         result = db.Serializable.as_dict(self)
         del result['family']
         del result['qualifier']
         result['object'] = 'taxon'
         result['rank'] = self.rank
         result['epithet'] = self.family
+        if recurse and self.accepted is not None:
+            result['accepted'] = self.accepted.as_dict(recurse=False)
         return result
 
     @classmethod
     def retrieve(cls, session, keys):
-        return session.query(cls).filter(
-            cls.family == keys['epithet']).all()
+        try:
+            return session.query(cls).filter(
+                cls.family == keys['epithet']).one()
+        except:
+            return None
 
     @classmethod
     def correct_field_names(cls, keys):
@@ -382,7 +405,7 @@ class FamilyEditorPresenter(editor.GenericEditorPresenter):
         # for each widget register a signal handler to be notified when the
         # value in the widget changes, that way we can do things like sensitize
         # the ok button
-        self.__dirty = False
+        self._dirty = False
 
     def refresh_sensitivity(self):
         # TODO: check widgets for problems
@@ -395,17 +418,17 @@ class FamilyEditorPresenter(editor.GenericEditorPresenter):
         # debug('set_model_attr(%s, %s)' % (field, value))
         super(FamilyEditorPresenter, self).set_model_attr(field, value,
                                                           validator)
-        self.__dirty = True
+        self._dirty = True
         self.refresh_sensitivity()
 
     def dirty(self):
-        return self.__dirty or self.synonyms_presenter.dirty() \
+        return self._dirty or self.synonyms_presenter.dirty() \
             or self.notes_presenter.dirty()
 
     def refresh_view(self):
         for widget, field in self.widget_to_field_map.iteritems():
             value = getattr(self.model, field)
-            self.view.set_widget_value(widget, value)
+            self.view.widget_set_value(widget, value)
 
     def cleanup(self):
         super(FamilyEditorPresenter, self).cleanup()
@@ -453,10 +476,10 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
                           self.on_add_button_clicked)
         self.view.connect('fam_syn_remove_button', 'clicked',
                           self.on_remove_button_clicked)
-        self.__dirty = False
+        self._dirty = False
 
     def dirty(self):
-        return self.__dirty
+        return self._dirty
 
     def init_treeview(self):
         '''
@@ -473,7 +496,7 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
         def _syn_data_func(column, cell, model, iter, data=None):
             v = model[iter][0]
             cell.set_property('text', str(v))
-            # just added so change the background color to indicate its new
+            # just added so change the background color to indicate it's new
             if v.id is None:
                 cell.set_property('foreground', 'blue')
             else:
@@ -516,7 +539,7 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
         entry.set_position(-1)
         self.view.widgets.fam_syn_add_button.set_sensitive(False)
         self.view.widgets.fam_syn_add_button.set_sensitive(False)
-        self.__dirty = True
+        self._dirty = True
         self.parent_ref().refresh_sensitivity()
 
     def on_remove_button_clicked(self, button, data=None):
@@ -540,7 +563,7 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
             self.model.synonyms.remove(value.synonym)
             utils.delete_or_expunge(value)
             self.session.flush([value])
-            self.__dirty = True
+            self._dirty = True
             self.refresh_sensitivity()
 
 
@@ -589,13 +612,13 @@ class FamilyEditor(editor.GenericModelViewPresenterEditor):
                     self._committed.append(self.model)
             except DBAPIError, e:
                 msg = _('Error committing changes.\n\n%s') % \
-                    utils.xml_safe_utf8(e.orig)
+                    utils.xml_safe(e.orig)
                 utils.message_details_dialog(msg, str(e), gtk.MESSAGE_ERROR)
                 return False
             except Exception, e:
                 msg = _('Unknown error when committing changes. See the '
                         'details for more information.\n\n%s') % \
-                    utils.xml_safe_utf8(e)
+                    utils.xml_safe(e)
                 utils.message_details_dialog(msg, traceback.format_exc(),
                                              gtk.MESSAGE_ERROR)
                 return False
@@ -703,23 +726,23 @@ class GeneralFamilyExpander(InfoExpander):
         :param row: the row to get the values from
         '''
         self.current_obj = row
-        self.set_widget_value('fam_name_data', '<big>%s</big>' % row,
+        self.widget_set_value('fam_name_data', '<big>%s</big>' % row,
                               markup=True)
         session = db.Session()
         # get the number of genera
         ngen = session.query(Genus).filter_by(family_id=row.id).count()
-        self.set_widget_value('fam_ngen_data', ngen)
+        self.widget_set_value('fam_ngen_data', ngen)
 
         # get the number of species
         nsp = (session.query(Species).join('genus').
                filter_by(family_id=row.id).count())
         if nsp == 0:
-            self.set_widget_value('fam_nsp_data', 0)
+            self.widget_set_value('fam_nsp_data', 0)
         else:
             ngen_in_sp = (session.query(Species.genus_id).
                           join('genus', 'family').
                           filter_by(id=row.id).distinct().count())
-            self.set_widget_value('fam_nsp_data', '%s in %s genera'
+            self.widget_set_value('fam_nsp_data', '%s in %s genera'
                                   % (nsp, ngen_in_sp))
 
         # stop here if no GardenPlugin
@@ -734,12 +757,12 @@ class GeneralFamilyExpander(InfoExpander):
                 join('species', 'genus', 'family').
                 filter_by(id=row.id).count())
         if nacc == 0:
-            self.set_widget_value('fam_nacc_data', nacc)
+            self.widget_set_value('fam_nacc_data', nacc)
         else:
             nsp_in_acc = (session.query(Accession.species_id).
                           join('species', 'genus', 'family').
                           filter_by(id=row.id).distinct().count())
-            self.set_widget_value('fam_nacc_data', '%s in %s species'
+            self.widget_set_value('fam_nacc_data', '%s in %s species'
                                   % (nacc, nsp_in_acc))
 
         # get the number of plants in the family
@@ -747,12 +770,12 @@ class GeneralFamilyExpander(InfoExpander):
                    join('accession', 'species', 'genus', 'family').
                    filter_by(id=row.id).count())
         if nplants == 0:
-            self.set_widget_value('fam_nplants_data', nplants)
+            self.widget_set_value('fam_nplants_data', nplants)
         else:
             nacc_in_plants = session.query(Plant.accession_id).\
                 join('accession', 'species', 'genus', 'family').\
                 filter_by(id=row.id).distinct().count()
-            self.set_widget_value('fam_nplants_data', '%s in %s accessions'
+            self.widget_set_value('fam_nplants_data', '%s in %s accessions'
                                   % (nplants, nacc_in_plants))
         session.close()
 
@@ -872,3 +895,5 @@ class FamilyInfoBox(InfoBox):
         self.synonyms.update(row)
         self.links.update(row)
         self.props.update(row)
+
+db.Family = Family

@@ -194,11 +194,11 @@ class History(history_base):
     """
     __tablename__ = 'history'
     id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
-    table_name = sa.Column(sa.String, nullable=False)
+    table_name = sa.Column(sa.Text, nullable=False)
     table_id = sa.Column(sa.Integer, nullable=False, autoincrement=False)
-    values = sa.Column(sa.String, nullable=False)
-    operation = sa.Column(sa.String, nullable=False)
-    user = sa.Column(sa.String)
+    values = sa.Column(sa.Text, nullable=False)
+    operation = sa.Column(sa.Text, nullable=False)
+    user = sa.Column(sa.Text)
     timestamp = sa.Column(types.DateTime, nullable=False)
 
 
@@ -242,7 +242,7 @@ def open(uri, verify=True, show_error_dialogs=False):
     try:
         new_engine.connect().close()  # make sure we can connect
     except Exception:
-        logger.warning('about to forget about encoding of exception text.')
+        logger.info('about to forget about encoding of exception text.')
         raise
 
     def _bind():
@@ -431,7 +431,53 @@ def verify_connection(engine, show_error_dialogs=False):
     return True
 
 
+class DefiningPictures:
+
+    @property
+    def pictures(self):
+        '''a list of gtk.Image objects
+        '''
+
+        import glib
+        import bauble.prefs as prefs
+        pfolder = prefs.prefs[prefs.picture_root_pref]
+        result = []
+        for n in self.notes:
+            if n.category != '<picture>':
+                continue
+            filename = os.path.join(pfolder, n.note)
+            im = gtk.Image()
+            try:
+                pixbuf = gtk.gdk.pixbuf_new_from_file(
+                    os.path.join(prefs.prefs[prefs.picture_root_pref],
+                                 filename))
+                scale_x = pixbuf.get_width() / 400
+                scale_y = pixbuf.get_height() / 400
+                scale = max(scale_x, scale_y, 1)
+                x = int(pixbuf.get_width() / scale)
+                y = int(pixbuf.get_height() / scale)
+                scaled_buf = pixbuf.scale_simple(x, y, gtk.gdk.INTERP_BILINEAR)
+                im.set_from_pixbuf(scaled_buf)
+            except glib.GError, e:
+                logger.debug("picture %s caused glib.GError %s" %
+                             (filename, e))
+                label = _('picture file %s not found.') % filename
+                im = gtk.Label()
+                im.set_text(label)
+            except Exception, e:
+                logger.warning("picture %s caused Exception %s" %
+                               (filename, e))
+                im = gtk.Label()
+                im.set_text(e)
+            result.append(im)
+        return result
+
+
 class Serializable:
+    import re
+    single_cap_re = re.compile('([A-Z])')
+    link_keys = []
+
     def as_dict(self):
         result = dict((col, getattr(self, col))
                       for col in self.__table__.columns.keys()
@@ -439,7 +485,8 @@ class Serializable:
                       and col[0] != '_'
                       and getattr(self, col) is not None
                       and not col.endswith('_id'))
-        result['object'] = self.__class__.__name__.lower()
+        result['object'] = self.single_cap_re.sub(
+            r'_\1', self.__class__.__name__).lower()[1:]
         return result
 
     @classmethod
@@ -465,17 +512,19 @@ class Serializable:
         logger.debug('initial value of keys: %s' % keys)
         ## first try retrieving
         is_in_session = cls.retrieve(session, keys)
+        logger.debug('2 value of keys: %s' % keys)
 
         if not create and not is_in_session:
             logger.debug('returning None (1)')
             return None
 
         if is_in_session and not update:
-            logger.debug("returning existing %s" % is_in_session)
-            return is_in_session[0]
+            logger.debug("returning not updated existing %s" % is_in_session)
+            return is_in_session
 
         try:
-            ## what fields are associated to objects
+            ## some fields are given as text but actually correspond to
+            ## different fields and should be associated to objects
             extradict = cls.compute_serializable_fields(
                 session, keys)
 
@@ -483,9 +532,22 @@ class Serializable:
             cls.correct_field_names(keys)
         except error.NoResultException:
             if not is_in_session:
+                logger.debug("returning None (2)")
                 return None
             else:
                 extradict = {}
+        logger.debug('3 value of keys: %s' % keys)
+
+        ## at this point, resulting object is either in database or not. in
+        ## either case, the database is going to be updated.
+
+        ## link_keys are python-side properties, not database associations
+        ## and have as value objects that are possibly in the database, or
+        ## not, but they cannot be used to construct the `self` object.
+        link_values = {}
+        for k in cls.link_keys:
+            if keys.get(k):
+                link_values[k] = keys[k]
 
         for k in keys.keys():
             if k not in class_mapper(cls).mapped_table.c:
@@ -495,15 +557,25 @@ class Serializable:
 
         keys.update(extradict)
 
+        ## completing the task of building the links
+        logger.debug("links? %s, %s" % (cls.link_keys, keys.keys()))
+        for key in cls.link_keys:
+            d = link_values.get(key)
+            if d is None:
+                continue
+            logger.debug('recursive call to construct_from_dict %s' % d)
+            obj = construct_from_dict(session, d)
+            keys[key] = obj
+
         if is_in_session and update:
-            result = is_in_session[0]
+            result = is_in_session
             logger.debug("going to update %s with %s" % (result, keys))
             if 'id' in keys:
                 del keys['id']
             for k, v in keys.items():
                 if v is not None:
                     setattr(result, k, v)
-            logger.debug('returning existing %s' % result)
+            logger.debug('returning updated existing %s' % result)
             return result
 
         result = cls(**keys)
@@ -512,3 +584,23 @@ class Serializable:
 
         logger.debug('returning new %s' % result)
         return result
+
+
+def construct_from_dict(session, obj, create=True, update=True):
+    ## get class and remove reference
+    logger.debug("construct_from_dict %s" % obj)
+    klass = None
+    if 'object' in obj:
+        klass = class_of_object(obj['object'])
+    if klass is None and 'rank' in obj:
+        klass = globals().get(obj['rank'].capitalize())
+        del obj['rank']
+    return klass.retrieve_or_create(session, obj, create=create, update=update)
+
+
+def class_of_object(o):
+    """what class implements object o
+    """
+
+    name = ''.join(p.capitalize() for p in o.split('_'))
+    return globals().get(name)

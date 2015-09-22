@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
+# Copyright (c) 2012-2015 Mario Frasca <mario@anche.no>
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 #
 # i18n.py
 #
@@ -12,7 +31,6 @@ this module more than once in an application.  It is usually imported
 in :mod:`bauble`
 """
 
-import sys
 import os
 import locale
 import gettext
@@ -61,10 +79,8 @@ lang = gettext.translation(TEXT_DOMAIN, paths.locale_dir(), languages=langs,
                            fallback=True)
 # install the language, map _() (which we marked our strings to
 # translate with) to self.lang.gettext() which will translate them.
-_ = lang.gettext
+_ = gettext.gettext
 
 # register the gettext function for the whole interpreter as "_"
 import __builtin__
 __builtin__._ = gettext.gettext
-
-import bauble

@@ -68,7 +68,7 @@ def remove_callback(locations):
         utils.message_dialog(msg, gtk.MESSAGE_WARNING)
         return
     msg = _("Are you sure you want to remove %s?") % \
-        utils.xml_safe_utf8(s)
+        utils.xml_safe(s)
     if not utils.yes_no_dialog(msg):
         return
     try:
@@ -77,7 +77,7 @@ def remove_callback(locations):
         session.delete(obj)
         session.commit()
     except Exception, e:
-        msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
+        msg = _('Could not delete.\n\n%s') % utils.xml_safe(e)
         utils.message_details_dialog(msg, traceback.format_exc(),
                                      type=gtk.MESSAGE_ERROR)
     return True
@@ -145,32 +145,15 @@ class Location(db.Base, db.Serializable):
 
     @classmethod
     def retrieve(cls, session, keys):
-        return session.query(cls).filter(
-            cls.code == keys['code']).all()
+        try:
+            return session.query(cls).filter(
+                cls.code == keys['code']).one()
+        except:
+            return None
 
 
 def mergevalues(value1, value2, formatter):
     """return the common value
-
-    if the values are equal, return it
-    >>> mergevalues('1', '1', '%s|%s')
-    '1'
-
-    if they conflict, return both
-    >>> mergevalues('2', '1', '%s|%s')
-    '2|1'
-
-    if one is empty, return the non empty one
-    >>> mergevalues('2', None, '%s|%s')
-    '2'
-    >>> mergevalues(None, '2', '%s|%s')
-    '2'
-    >>> mergevalues('2', '', '%s|%s')
-    '2'
-
-    if both are empty, return the empty string
-    >>> mergevalues(None, None, '%s|%s')
-    ''
     """
 
     if value1 == value2:
@@ -233,7 +216,7 @@ class LocationEditorPresenter(GenericEditorPresenter):
         '''
         GenericEditorPresenter.__init__(self, model, view)
         self.session = object_session(model)
-        self.__dirty = False
+        self._dirty = False
 
         # initialize widgets
         self.refresh_view()  # put model values in view
@@ -301,16 +284,16 @@ class LocationEditorPresenter(GenericEditorPresenter):
 
         # step 2: merge model and merger_candidate  `description` and `name`
         # fields, mark there's a problem to solve there.
-        self.view.set_widget_value('loc_code_entry',
+        self.view.widget_set_value('loc_code_entry',
                                    getattr(self.model, 'code'))
 
         buf = self.view.widgets.loc_desc_textview.get_buffer()
-        self.view.set_widget_value(
+        self.view.widget_set_value(
             'loc_desc_textview', mergevalues(
                 buf.get_text(*buf.get_bounds()),
                 getattr(self.merger_candidate, 'description'),
                 "%s\n---------\n%s"))
-        self.view.set_widget_value(
+        self.view.widget_set_value(
             'loc_name_entry', mergevalues(
                 self.view.widgets.loc_name_entry.get_text(),
                 getattr(self.merger_candidate, 'name'),
@@ -319,7 +302,7 @@ class LocationEditorPresenter(GenericEditorPresenter):
 
         # step 3: delete self.merger_candidate and clean the entry
         self.session.delete(self.merger_candidate)
-        self.view.set_widget_value('loc_merge_comboentry', '')
+        self.view.widget_set_value('loc_merge_comboentry', '')
 
         # step 4: collapse the expander
         self.view.widgets.danger_zone.set_expanded(False)
@@ -335,16 +318,16 @@ class LocationEditorPresenter(GenericEditorPresenter):
     def set_model_attr(self, attr, value, validator=None):
         super(LocationEditorPresenter, self).\
             set_model_attr(attr, value, validator)
-        self.__dirty = True
+        self._dirty = True
         self.refresh_sensitivity()
 
     def dirty(self):
-        return self.__dirty
+        return self._dirty
 
     def refresh_view(self):
         for widget, field in self.widget_to_field_map.iteritems():
             value = getattr(self.model, field)
-            self.view.set_widget_value(widget, value)
+            self.view.widget_set_value(widget, value)
 
     def start(self):
         r = self.view.start()
@@ -397,14 +380,14 @@ class LocationEditor(GenericModelViewPresenterEditor):
                 self._committed.append(self.model)
             except DBAPIError, e:
                 msg = _('Error committing changes.\n\n%s') % \
-                    utils.xml_safe_utf8(e.orig)
+                    utils.xml_safe(e.orig)
                 utils.message_details_dialog(msg, str(e), gtk.MESSAGE_ERROR)
                 self.session.rollback()
                 return False
             except Exception, e:
                 msg = _('Unknown error when committing changes. See the '
                         'details for more information.\n\n%s') % \
-                    utils.xml_safe_utf8(e)
+                    utils.xml_safe(e)
                 utils.message_details_dialog(msg, traceback.format_exc(),
                                              gtk.MESSAGE_ERROR)
                 self.session.rollback()
@@ -469,12 +452,12 @@ class GeneralLocationExpander(InfoExpander):
         '''
         '''
         from bauble.plugins.garden.plant import Plant
-        self.set_widget_value('loc_name_data',
+        self.widget_set_value('loc_name_data',
                               '<big>%s</big>' % utils.xml_safe(str(row)),
                               markup=True)
         session = object_session(row)
         nplants = session.query(Plant).filter_by(location_id=row.id).count()
-        self.set_widget_value('loc_nplants_data', nplants)
+        self.widget_set_value('loc_nplants_data', nplants)
 
 
 class DescriptionExpander(InfoExpander):
@@ -497,7 +480,7 @@ class DescriptionExpander(InfoExpander):
         else:
             self.set_expanded(True)
             self.set_sensitive(True)
-            self.set_widget_value('loc_descr_data', str(row.description))
+            self.widget_set_value('loc_descr_data', str(row.description))
 
 
 class LocationInfoBox(InfoBox):

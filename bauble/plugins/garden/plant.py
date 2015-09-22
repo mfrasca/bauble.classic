@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
 
 import gtk
-import glib
 
 from bauble.i18n import _
 from sqlalchemy import and_, func
@@ -90,7 +89,7 @@ def branch_callback(plants):
 def remove_callback(plants):
     s = ', '.join([str(p) for p in plants])
     msg = _("Are you sure you want to remove the following plants?\n\n%s") \
-        % utils.xml_safe_utf8(s)
+        % utils.xml_safe(s)
     if not utils.yes_no_dialog(msg):
         return
 
@@ -101,7 +100,7 @@ def remove_callback(plants):
     try:
         session.commit()
     except Exception, e:
-        msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
+        msg = _('Could not delete.\n\n%s') % utils.xml_safe(e)
 
         utils.message_details_dialog(msg, traceback.format_exc(),
                                      type=gtk.MESSAGE_ERROR)
@@ -131,10 +130,10 @@ def plant_markup_func(plant):
     dead_color = "#9900ff"
     if plant.quantity <= 0:
         dead_markup = '<span foreground="%s">%s</span>' % \
-            (dead_color, utils.xml_safe_utf8(plant))
+            (dead_color, utils.xml_safe(plant))
         return dead_markup, sp_str
     else:
-        return utils.xml_safe_utf8(plant), sp_str
+        return utils.xml_safe(plant), sp_str
 
 
 def get_next_code(acc):
@@ -192,30 +191,37 @@ class PlantSearch(SearchStrategy):
         super(PlantSearch, self).__init__()
 
     def search(self, text, session):
-        # TODO: this doesn't support search like plant=2009.0039.1 or
-        # plant where accession.code=2009.0039
+        """returns a result if the text looks like a quoted plant code
 
-        # TODO: searches like 2009.0039.% or * would be handy
-        r1 = super(PlantSearch, self).search(text, session)
+        special search strategy, can't be obtained in MapperSearch
+        """
+
+        if text[0] == text[-1] and text[0] in ['"', "'"]:
+            text = text[1:-1]
+        else:
+            logger.debug("text is not quoted, so strategy does not apply")
+            return []
         delimiter = Plant.get_delimiter()
         if delimiter not in text:
+            logger.debug("delimiter not found, can't split the code")
             return []
         acc_code, plant_code = text.rsplit(delimiter, 1)
-        query = session.query(Plant)
-        from bauble.plugins.garden import Accession
+        logger.debug("ac: %s, pl: %s" % (acc_code, plant_code))
+
         try:
-            q = query.join('accession').\
-                filter(and_(Accession.code == acc_code,
-                            Plant.code == plant_code))
+            from bauble.plugins.garden import Accession
+            query = session.query(Plant).filter(
+                Plant.code == unicode(plant_code)).join(Accession).filter(
+                Accession.code == unicode(acc_code))
+            return query.all()
         except Exception, e:
-            logger.debug(e)
+            logger.debug("%s %s" % (e.__class__.name, e))
             return []
-        return q.all()
 
 
 # TODO: what would happen if the PlantRemove.plant_id and PlantNote.plant_id
 # were out of synch.... how could we avoid these sort of cycles
-class PlantNote(db.Base):
+class PlantNote(db.Base, db.Serializable):
     __tablename__ = 'plant_note'
     __mapper_args__ = {'order_by': 'plant_note.date'}
 
@@ -226,6 +232,45 @@ class PlantNote(db.Base):
     plant_id = Column(Integer, ForeignKey('plant.id'), nullable=False)
     plant = relation('Plant', uselist=False,
                      backref=backref('notes', cascade='all, delete-orphan'))
+
+    def as_dict(self):
+        result = db.Serializable.as_dict(self)
+        result['plant'] = (self.plant.accession.code +
+                           Plant.get_delimiter() + self.plant.code)
+        return result
+
+    @classmethod
+    def retrieve(cls, session, keys):
+        q = session.query(cls)
+        if 'plant' in keys:
+            acc_code, plant_code = keys['plant'].rsplit(
+                Plant.get_delimiter(), 1)
+            q = q.join(
+                Plant).filter(Plant.code == unicode(plant_code)).join(
+                Accession).filter(Accession.code == unicode(acc_code))
+        if 'date' in keys:
+            q = q.filter(cls.date == keys['date'])
+        if 'category' in keys:
+            q = q.filter(cls.category == keys['category'])
+        try:
+            return q.one()
+        except:
+            return None
+
+    @classmethod
+    def compute_serializable_fields(cls, session, keys):
+        result = {'accession': None}
+
+        acc_keys = {}
+        acc_keys.update(keys)
+        acc_keys['code'] = keys['accession']
+        accession = Accession.retrieve_or_create(
+            session, acc_keys, create=(
+                'taxon' in acc_keys and 'rank' in acc_keys))
+
+        result['accession'] = accession
+
+        return result
 
 
 # TODO: some of these reasons are specific to UBC and could probably be culled.
@@ -370,7 +415,7 @@ acc_type_values = {u'Plant': _('Plant'),
                    None: ''}
 
 
-class Plant(db.Base, db.Serializable):
+class Plant(db.Base, db.Serializable, db.DefiningPictures):
     """
     :Table name: plant
 
@@ -439,43 +484,6 @@ class Plant(db.Base, db.Serializable):
                             backref=backref('plant', uselist=False))
 
     _delimiter = None
-
-    @property
-    def pictures(self):
-        '''a list of gtk.Image objects
-        '''
-
-        pfolder = prefs.prefs[prefs.picture_root_pref]
-        result = []
-        for n in self.notes:
-            if n.category != '<picture>':
-                continue
-            filename = os.path.join(pfolder, n.note)
-            im = gtk.Image()
-            try:
-                pixbuf = gtk.gdk.pixbuf_new_from_file(
-                    os.path.join(prefs.prefs[prefs.picture_root_pref],
-                                 filename))
-                scale_x = pixbuf.get_width() / 400
-                scale_y = pixbuf.get_height() / 400
-                scale = max(scale_x, scale_y, 1)
-                x = int(pixbuf.get_width() / scale)
-                y = int(pixbuf.get_height() / scale)
-                scaled_buf = pixbuf.scale_simple(x, y, gtk.gdk.INTERP_BILINEAR)
-                im.set_from_pixbuf(scaled_buf)
-            except glib.GError, e:
-                logger.debug("picture %s caused glib.GError %s" %
-                             (filename, e))
-                label = _('picture file %s not found.') % filename
-                im = gtk.Label()
-                im.set_text(label)
-            except Exception, e:
-                logger.warning("picture %s caused Exception %s" %
-                               (filename, e))
-                im = gtk.Label()
-                im.set_text(_("%s" % e))
-            result.append(im)
-        return result
 
     @classmethod
     def get_delimiter(cls, refresh=False):
@@ -584,9 +592,12 @@ class Plant(db.Base, db.Serializable):
 
     @classmethod
     def retrieve(cls, session, keys):
-        return session.query(cls).filter(
-            cls.code == keys['code']).join(Accession).filter(
-            Accession.code == keys['accession']).all()
+        try:
+            return session.query(cls).filter(
+                cls.code == keys['code']).join(Accession).filter(
+                Accession.code == keys['accession']).one()
+        except:
+            return None
 
 
 from bauble.plugins.garden.accession import Accession
@@ -672,7 +683,7 @@ class PlantEditorPresenter(GenericEditorPresenter):
         self._original_quantity = None
         if model not in self.session.new:
             self._original_quantity = self.model.quantity
-        self.__dirty = False
+        self._dirty = False
 
         # set default values for acc_type
         if self.model.id is None and self.model.acc_type is None:
@@ -767,9 +778,10 @@ class PlantEditorPresenter(GenericEditorPresenter):
                           self.on_loc_button_clicked, 'edit')
 
     def dirty(self):
-        return self.pictures_presenter.dirty() or \
-            self.notes_presenter.dirty() or \
-            self.prop_presenter.dirty() or self.__dirty
+        return (self.pictures_presenter.dirty() or
+                self.notes_presenter.dirty() or
+                self.prop_presenter.dirty() or
+                self._dirty)
 
     def on_date_entry_changed(self, entry, *args):
         self.change.date = entry.props.text
@@ -807,7 +819,7 @@ class PlantEditorPresenter(GenericEditorPresenter):
             self.refresh_sensitivity()
             return
 
-        # add a problem if the code is not unique but not if its the
+        # add a problem if the code is not unique but not if it's the
         # same accession and plant code that we started with when the
         # editor was opened
         if self.model.code is not None and not \
@@ -855,7 +867,7 @@ class PlantEditorPresenter(GenericEditorPresenter):
         logger.debug('set_model_attr(%s, %s)' % (field, value))
         super(PlantEditorPresenter, self)\
             .set_model_attr(field, value, validator)
-        self.__dirty = True
+        self._dirty = True
         self.refresh_sensitivity()
 
     def on_loc_button_clicked(self, button, cmd=None):
@@ -864,14 +876,14 @@ class PlantEditorPresenter(GenericEditorPresenter):
         if cmd is 'edit' and location:
             LocationEditor(location, parent=self.view.get_window()).start()
             self.session.refresh(location)
-            self.view.set_widget_value(combo, location)
+            self.view.widget_set_value(combo, location)
         else:
             editor = LocationEditor(parent=self.view.get_window())
             if editor.start():
                 location = self.model.location = editor.presenter.model
                 self.session.add(location)
                 self.remove_problem(None, combo)
-                self.view.set_widget_value(combo, location)
+                self.view.widget_set_value(combo, location)
                 self.set_model_attr('location', location)
 
     def refresh_view(self):
@@ -879,10 +891,10 @@ class PlantEditorPresenter(GenericEditorPresenter):
         # new plants
         for widget, field in self.widget_to_field_map.iteritems():
             value = getattr(self.model, field)
-            self.view.set_widget_value(widget, value)
+            self.view.widget_set_value(widget, value)
             logger.debug('%s: %s = %s' % (widget, field, value))
 
-        self.view.set_widget_value('plant_acc_type_combo',
+        self.view.widget_set_value('plant_acc_type_combo',
                                    acc_type_values[self.model.acc_type],
                                    index=1)
         self.view.widgets.plant_memorial_check.set_inconsistent(False)
@@ -1002,7 +1014,7 @@ class PlantEditor(GenericModelViewPresenterEditor):
             return
 
         # this method will create new plants from self.model even if
-        # the plant code is not a range....its a small price to pay
+        # the plant code is not a range....it's a small price to pay
         plants = []
         mapper = object_mapper(self.model)
         # TODO: precompute the _created and _last_updated attributes
@@ -1057,7 +1069,7 @@ class PlantEditor(GenericModelViewPresenterEditor):
             except Exception, e:
                 msg = _('Unknown error when committing changes. See the '
                         'details for more information.\n\n%s') \
-                    % utils.xml_safe_utf8(e)
+                    % utils.xml_safe(e)
                 logger.debug(traceback.format_exc())
                 utils.message_details_dialog(msg, traceback.format_exc(),
                                              gtk.MESSAGE_ERROR)
@@ -1119,8 +1131,7 @@ class PlantEditor(GenericModelViewPresenterEditor):
             msg = _('Branching from %(plant_code)s.  The quantity will '
                     'be subtracted from %(plant_code)s') \
                 % {'plant_code': str(self.branched_plant)}
-            box = utils.add_message_box(message_box_parent,
-                                        utils.MESSAGE_BOX_INFO)
+            box = self.presenter.view.add_message_box(utils.MESSAGE_BOX_INFO)
             box.message = msg
             box.show_all()
 
@@ -1178,23 +1189,23 @@ class GeneralPlantExpander(InfoExpander):
         plant_code = str(row)
         head, tail = plant_code[:len(acc_code)], plant_code[len(acc_code):]
 
-        self.set_widget_value('acc_code_data', '<big>%s</big>' %
+        self.widget_set_value('acc_code_data', '<big>%s</big>' %
                               utils.xml_safe(unicode(head)),
                               markup=True)
-        self.set_widget_value('plant_code_data', '<big>%s</big>' %
+        self.widget_set_value('plant_code_data', '<big>%s</big>' %
                               utils.xml_safe(unicode(tail)), markup=True)
-        self.set_widget_value('name_data',
+        self.widget_set_value('name_data',
                               row.accession.species_str(markup=True),
                               markup=True)
-        self.set_widget_value('location_data', str(row.location))
-        self.set_widget_value('quantity_data', row.quantity)
+        self.widget_set_value('location_data', str(row.location))
+        self.widget_set_value('quantity_data', row.quantity)
 
         status_str = _('Alive')
         if row.quantity <= 0:
             status_str = _('Dead')
-        self.set_widget_value('status_data', status_str, False)
+        self.widget_set_value('status_data', status_str, False)
 
-        self.set_widget_value('type_data', acc_type_values[row.acc_type],
+        self.widget_set_value('type_data', acc_type_values[row.acc_type],
                               False)
 
         image_size = gtk.ICON_SIZE_MENU
@@ -1277,7 +1288,7 @@ class ChangesExpander(InfoExpander):
             current_row += 1
             if change.parent_plant:
                 s = _('<i>Branched from %(plant)s</i>') % \
-                    dict(plant=utils.xml_safe_utf8(change.parent_plant))
+                    dict(plant=utils.xml_safe(change.parent_plant))
                 label = gtk.Label()
                 label.set_alignment(0, .5)
                 label.set_markup(s)

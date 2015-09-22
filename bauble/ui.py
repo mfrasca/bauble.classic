@@ -80,8 +80,8 @@ class GUI(object):
             pixbuf = gtk.gdk.pixbuf_new_from_file(bauble.default_icon)
             self.window.set_icon(pixbuf)
         except Exception:
-            logger.warning(_('Could not load icon from %s'
-                             % bauble.default_icon))
+            logger.warning(_('Could not load icon from %s')
+                           % bauble.default_icon)
             logger.warning(traceback.format_exc())
 
         menubar = self.create_main_menu()
@@ -334,10 +334,10 @@ class GUI(object):
         # create and addaction group for menu actions
         menu_actions = gtk.ActionGroup("MenuActions")
         menu_actions.add_actions([("file", None, _("_File")),
-                                  ("file_new", gtk.STOCK_NEW, _("_New"),
-                                   None, None, self.on_file_menu_new),
-                                  # ("file_open", gtk.STOCK_OPEN, _("_Open"),
-                                  #  '<ctrl>o', None, self.on_file_menu_open),
+                                  #("file_new", gtk.STOCK_NEW, _("_New"),
+                                  # None, None, self.on_file_menu_new),
+                                  ("file_open", gtk.STOCK_OPEN, _("_Open"),
+                                   '<ctrl>o', None, self.on_file_menu_open),
                                   ("file_quit", gtk.STOCK_QUIT, _("_Quit"),
                                    None, None, self.on_quit),
                                   ("edit", None, _("_Edit")),
@@ -355,6 +355,9 @@ class GUI(object):
                                    self.on_help_menu_contents),
                                   ("help_bug", None, _("Report a bug"), None,
                                    None, self.on_help_menu_bug),
+                                  ("help_logfile", gtk.STOCK_PROPERTIES,
+                                   _("Open the log-file"), None,
+                                   None, self.on_help_menu_logfile),
                                   ("help_web.devel", gtk.STOCK_HOME,
                                    _("Bauble development website"), None,
                                    None, self.on_help_menu_web_devel),
@@ -562,9 +565,9 @@ class GUI(object):
             db.create()
             pluginmgr.init()
         except Exception, e:
-            msg = _('Could not create a new database.\n\n%s' %
-                    utils.xml_safe_utf8(e))
-            tb = utils.xml_safe_utf8(traceback.format_exc())
+            msg = _('Could not create a new database.\n\n%s') % \
+                utils.xml_safe(e)
+            tb = utils.xml_safe(traceback.format_exc())
             utils.message_details_dialog(msg, tb, gtk.MESSAGE_ERROR)
             return
         self.set_default_view()
@@ -573,9 +576,9 @@ class GUI(object):
         """
         Open the connection manager.
         """
-        from connmgr import ConnectionManager
+        from connmgr import ConnMgrPresenter
         default_conn = prefs[bauble.conn_default_pref]
-        cm = ConnectionManager(default_conn)
+        cm = ConnMgrPresenter(default=default_conn)
         name, uri = cm.start()
         if name is None:
             return
@@ -615,7 +618,7 @@ class GUI(object):
         """
         Call gtk.Statusbar.pop() for each context_id that had previously
         been pushed() onto the the statusbar stack.  This might not clear
-        all the messages in the statusbar but its the best we can do
+        all the messages in the statusbar but it's the best we can do
         without knowing how many messages are in the stack.
         """
         # TODO: to clear everything in the statusbar we would probably
@@ -631,6 +634,10 @@ class GUI(object):
     def on_help_menu_bug(self, widget, data=None):
         desktop.open('https://github.com/Bauble/bauble.classic/issues/new',
                      dialog_on_error=True)
+
+    def on_help_menu_logfile(self, widget, data=None):
+        filename = os.path.join(paths.user_dir(), 'bauble.log')
+        desktop.open(filename, dialog_on_error=True)
 
     def on_help_menu_web_devel(self, widget, data=None):
         desktop.open('http://github.com/Bauble/bauble.classic/',
@@ -654,7 +661,7 @@ class GUI(object):
         f = os.path.join(paths.lib_dir(), 'images', 'icon.svg')
         pixbuf = gtk.gdk.pixbuf_new_from_file(f)
         about.set_logo(pixbuf)
-        about.set_copyright(_(u'Copyright \u00A9 by its contributors.'))
+        about.set_copyright(_(u'Copyright © by its contributors.'))
 
         import codecs
         with codecs.open(os.path.join(paths.installation_dir(), 'share',

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # This file is part of bauble.classic.
 #
 # bauble.classic is free software: you can redistribute it and/or modify
@@ -16,4 +18,4 @@
 # The Bauble version.
 # major, minor, revision version tuple
 
-version = "1.0.37"  # :bump
+version = "1.0.52"  # :bump

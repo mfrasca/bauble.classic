@@ -71,7 +71,7 @@ infrasp_rank_values = {u'subsp.': _('subsp.'),
 # make sure that at least one of the specific epithet, cultivar name
 # or cultivar group is specificed
 
-class Species(db.Base, db.Serializable):
+class Species(db.Base, db.Serializable, db.DefiningPictures):
     """
     :Table name: species
 
@@ -136,6 +136,7 @@ class Species(db.Base, db.Serializable):
     __mapper_args__ = {'order_by': ['sp', 'sp_author']}
 
     rank = 'species'
+    link_keys = ['accepted']
 
     @property
     def cites(self):
@@ -146,7 +147,7 @@ class Species(db.Base, db.Serializable):
         '''
 
         cites_notes = [i.note for i in self.notes
-                       if i.category.upper() == u'CITES']
+                       if i.category and i.category.upper() == u'CITES']
         if not cites_notes:
             return self.genus.cites
         return cites_notes[0]
@@ -160,16 +161,18 @@ class Species(db.Base, db.Serializable):
         '''
 
         {'EX': _('Extinct (EX)'),
+         'EW': _('Extinct Wild (EW)'),
          'RE': _('Regionally Extinct (RE)'),
          'CR': _('Critically Endangered (CR)'),
          'EN': _('Endangered (EN)'),
          'VU': _('Vulnerable (VU)'),
          'NT': _('Near Threatened (NT)'),
          'LV': _('Least Concern (LC)'),
-         'DD': _('Data Deficient (DD)')}
+         'DD': _('Data Deficient (DD)'),
+         'NE': _('Not Evaluated (NE)')}
 
         notes = [i.note for i in self.notes
-                 if i.category.upper() == u'IUCN']
+                 if i.category and i.category.upper() == u'IUCN']
         return (notes + ['DD'])[0]
 
     @property
@@ -236,6 +239,7 @@ class Species(db.Base, db.Serializable):
                     primaryjoin='Species.id==SpeciesSynonym.synonym_id',
                     cascade='all, delete-orphan', uselist=True)
 
+    ## VernacularName.species gets defined here too.
     vernacular_names = relation('VernacularName', cascade='all, delete-orphan',
                                 collection_class=VNList,
                                 backref=backref('species', uselist=False))
@@ -259,9 +263,6 @@ class Species(db.Base, db.Serializable):
 
     def __init__(self, *args, **kwargs):
         super(Species, self).__init__(*args, **kwargs)
-
-    def __repr__(self):
-        return Species.str(self)
 
     def __str__(self):
         '''
@@ -329,7 +330,7 @@ class Species(db.Base, db.Serializable):
         sp = species.sp
         sp2 = species.sp2
         if markup:
-            escape = utils.xml_safe_utf8
+            escape = utils.xml_safe
             italicize = lambda s: u'<i>%s</i>' % escape(s)
             genus = italicize(genus)
             if sp is not None:
@@ -395,6 +396,24 @@ class Species(db.Base, db.Serializable):
         s = utils.utf8(' '.join(filter(lambda x: x not in ('', None), parts)))
         return s
 
+    @property
+    def accepted(self):
+        'Name that should be used if name of self should be rejected'
+        from sqlalchemy.orm.session import object_session
+        session = object_session(self)
+        syn = session.query(SpeciesSynonym).filter(
+            SpeciesSynonym.synonym_id == self.id).first()
+        accepted = syn and syn.family
+        return accepted
+
+    @accepted.setter
+    def accepted(self, value):
+        'Name that should be used if name of self should be rejected'
+        assert isinstance(value, self.__class__)
+        if self in value.synonyms:
+            return
+        value.synonyms.append(self)
+
     def has_accessions(self):
         '''true if species is linked to at least one accession
         '''
@@ -430,7 +449,7 @@ class Species(db.Base, db.Serializable):
         setattr(self, self.infrasp_attr[level]['epithet'], epithet)
         setattr(self, self.infrasp_attr[level]['author'], author)
 
-    def as_dict(self):
+    def as_dict(self, recurse=True):
         result = dict((col, getattr(self, col))
                       for col in self.__table__.columns.keys()
                       if col not in ['id', 'sp']
@@ -442,6 +461,8 @@ class Species(db.Base, db.Serializable):
         result['epithet'] = self.sp
         result['ht-rank'] = 'genus'
         result['ht-epithet'] = self.genus.genus
+        if recurse and self.accepted is not None:
+            result['accepted'] = self.accepted.as_dict(recurse=False)
         return result
 
     @classmethod
@@ -455,9 +476,12 @@ class Species(db.Base, db.Serializable):
     @classmethod
     def retrieve(cls, session, keys):
         from genus import Genus
-        return session.query(cls).filter(
-            cls.sp == keys['epithet']).join(Genus).filter(
-            Genus.genus == keys['ht-epithet']).all()
+        try:
+            return session.query(cls).filter(
+                cls.sp == keys['epithet']).join(Genus).filter(
+                Genus.genus == keys['ht-epithet']).one()
+        except:
+            return None
 
     @classmethod
     def compute_serializable_fields(cls, session, keys):
@@ -509,10 +533,13 @@ class SpeciesNote(db.Base, db.Serializable):
     def retrieve(cls, session, keys):
         from genus import Genus
         genus, epithet = keys['species'].split(' ', 1)
-        return session.query(cls).filter(
-            cls.category == keys['category']).join(Species).filter(
-            Species.sp == epithet).join(Genus).filter(
-            Genus.genus == genus).all()
+        try:
+            return session.query(cls).filter(
+                cls.category == keys['category']).join(Species).filter(
+                Species.sp == epithet).join(Genus).filter(
+                Genus.genus == genus).one()
+        except:
+            return None
 
 
 class SpeciesSynonym(db.Base):
@@ -541,7 +568,7 @@ class SpeciesSynonym(db.Base):
         return str(self.synonym)
 
 
-class VernacularName(db.Base):
+class VernacularName(db.Base, db.Serializable):
     """
     :Table name: vernacular_name
 
@@ -572,6 +599,46 @@ class VernacularName(db.Base):
             return self.name
         else:
             return ''
+
+    def replacement(self):
+        'user wants the species, not just the name'
+        return self.species
+
+    def as_dict(self):
+        result = db.Serializable.as_dict(self)
+        result['species'] = str(self.species)
+        return result
+
+    @classmethod
+    def compute_serializable_fields(cls, session, keys):
+        logger.debug('compute_serializable_fields(session, %s)' % keys)
+        result = {'species': None}
+        if 'species' in keys:
+            ## now we must connect the name to the species it refers to
+            genus_name, epithet = keys['species'].split(' ', 1)
+            sp_dict = {'ht-epithet': genus_name,
+                       'epithet': epithet}
+            result['species'] = Species.retrieve_or_create(
+                session, sp_dict, create=False)
+        return result
+
+    @classmethod
+    def retrieve(cls, session, keys):
+        from genus import Genus
+        g_epithet, s_epithet = keys['species'].split(' ', 1)
+        sp = session.query(Species).filter(
+            Species.sp == s_epithet).join(Genus).filter(
+            Genus.genus == g_epithet).first()
+        try:
+            return session.query(cls).filter(
+                cls.species == sp,
+                cls.language == keys['language']).one()
+        except:
+            return None
+
+    @property
+    def pictures(self):
+        return self.species.pictures
 
 
 class DefaultVernacularName(db.Base):
@@ -662,3 +729,8 @@ class Color(db.Base):
             return '%s (%s)' % (self.name, self.code)
         else:
             return str(self.code)
+
+
+db.Species = Species
+db.SpeciesNote = SpeciesNote
+db.VernacularName = VernacularName

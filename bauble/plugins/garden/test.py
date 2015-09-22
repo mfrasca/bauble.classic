@@ -55,12 +55,16 @@ from bauble.plugins.garden.institution import Institution, InstitutionEditor
 import bauble.prefs as prefs
 
 
-accession_test_data = ({'id': 1, 'code': u'1.1', 'species_id': 1},
-                       {'id': 2, 'code': u'2.2', 'species_id': 2,
+accession_test_data = ({'id': 1, 'code': u'2001.1', 'species_id': 1},
+                       {'id': 2, 'code': u'2001.2', 'species_id': 2,
                         'source_type': u'Collection'},
                        )
 
 plant_test_data = ({'id': 1, 'code': u'1', 'accession_id': 1,
+                    'location_id': 1, 'quantity': 1},
+                   {'id': 2, 'code': u'1', 'accession_id': 2,
+                    'location_id': 1, 'quantity': 1},
+                   {'id': 3, 'code': u'2', 'accession_id': 2,
                     'location_id': 1, 'quantity': 1},
                    )
 
@@ -171,7 +175,6 @@ class GardenTestCase(BaubleTestCase):
     def setUp(self):
         super(GardenTestCase, self).setUp()
         plants_test.setUp_data()
-        #setUp_test_data()
         self.family = Family(family=u'Cactaceae')
         self.genus = Genus(family=self.family, genus=u'Echinocactus')
         self.species = Species(genus=self.genus, sp=u'grusonii')
@@ -276,9 +279,9 @@ class PlantTests(GardenTestCase):
 
     def test_delete(self):
         """
-        TODO: Test that when a plant is deleted...
+        Test that when a plant is deleted...
         """
-        pass
+        raise SkipTest('Not Implemented')
 
     def test_editor_addnote(self):
         raise SkipTest('Not Implemented')
@@ -349,10 +352,11 @@ class PlantTests(GardenTestCase):
             self.assert_(q.first(), 'plant %s.%s not created' %
                          (self.accession, code))
 
-    def itest_editor(self):
+    def test_editor(self):
         """
         Interactively test the PlantEditor
         """
+        raise SkipTest('Not Implemented')
         for plant in self.session.query(Plant):
             self.session.delete(plant)
         for location in self.session.query(Location):
@@ -421,10 +425,11 @@ class PlantTests(GardenTestCase):
         assert new_plant.changes[0].parent_plant == self.plant, \
             'change.parent_plant != original plant'
 
-    def itest_branch_callback(self):
+    def test_branch_callback(self):
         """
         Test bauble.plugins.garden.plant.branch_callback()
         """
+        raise SkipTest('Not Implemented')
         for plant in self.session.query(Plant):
             self.session.delete(plant)
         for location in self.session.query(Location):
@@ -480,11 +485,12 @@ class PropagationTests(GardenTestCase):
         #self.session.begin()
         super(PropagationTests, self).tearDown()
 
-    def itest_accession_prop(self):
+    def test_accession_prop(self):
         # 'Accession' object has no attribute 'propagations'
         """
         Test the Accession->AccessionPropagation->Propagation relation
         """
+        raise SkipTest('Not Implemented')
         loc = Location(name=u'name', code=u'code')
         plant = Plant(accession=self.accession, location=loc, code=u'1',
                       quantity=1)
@@ -598,12 +604,12 @@ class PropagationTests(GardenTestCase):
         widgets = self.editor.presenter.view.widgets
         self.assertTrue(widgets is not None)
         view = self.editor.presenter.view
-        view.set_widget_value('prop_type_combo', u'UnrootedCutting')
-        view.set_widget_value('prop_date_entry', utils.today_str())
+        view.widget_set_value('prop_type_combo', u'UnrootedCutting')
+        view.widget_set_value('prop_date_entry', utils.today_str())
         cutting_presenter = self.editor.presenter._cutting_presenter
         for widget, attr in cutting_presenter.widget_to_field_map.iteritems():
             #debug('%s=%s' % (widget, default_cutting_values[attr]))
-            view.set_widget_value(widget, default_cutting_values[attr])
+            view.widget_set_value(widget, default_cutting_values[attr])
         update_gui()
         self.editor.handle_response(gtk.RESPONSE_OK)
         self.editor.commit_changes()
@@ -628,16 +634,16 @@ class PropagationTests(GardenTestCase):
         view = editor.presenter.view
 
         # set default values in editor widgets
-        view.set_widget_value('prop_type_combo', u'Seed')
-        view.set_widget_value('prop_date_entry',
+        view.widget_set_value('prop_type_combo', u'Seed')
+        view.widget_set_value('prop_date_entry',
                               default_propagation_values['date'])
-        view.set_widget_value('notes_textview',
+        view.widget_set_value('notes_textview',
                               default_propagation_values['notes'])
         for widget, attr in seed_presenter.widget_to_field_map.iteritems():
             w = widgets[widget]
             if isinstance(w, gtk.ComboBoxEntry) and not w.get_model():
                 widgets[widget].child.props.text = default_seed_values[attr]
-            view.set_widget_value(widget, default_seed_values[attr])
+            view.widget_set_value(widget, default_seed_values[attr])
 
         # update the editor, send the RESPONSE_OK signal and commit the changes
         update_gui()
@@ -721,10 +727,11 @@ class PropagationTests(GardenTestCase):
             self.assert_(value == default,
                          '%s = %s (%s)' % (attr, value, default))
 
-    def itest_editor(self):
+    def test_editor(self):
         """
         Interactively test the PropagationEditor
         """
+        raise SkipTest('Not Implemented')
         from bauble.plugins.garden.propagation import PropagationEditor
         propagation = Propagation()
         #propagation.prop_type = u'UnrootedCutting'
@@ -791,7 +798,7 @@ class SourceTests(GardenTestCase):
         source.propagation = Propagation(prop_type=u'Seed')
 
         # a propagation doesn't normally have _seed and _cutting but
-        # its ok here for the test
+        # it's ok here for the test
         seed = PropSeed(**default_seed_values)
         seed.propagation = source.propagation
         cutting = PropCutting(**default_cutting_values)
@@ -861,7 +868,8 @@ class SourceTests(GardenTestCase):
         self.assert_(self.session.query(Propagation).get(plant_prop_id))
         self.assert_(self.session.query(SourceDetail).get(source_detail_id))
 
-    def itest_details_editor(self):
+    def test_details_editor(self):
+        raise SkipTest('Not Implemented')
         e = SourceDetailEditor()
         e.start()
 
@@ -879,7 +887,7 @@ class AccessionTests(GardenTestCase):
 
     def test_species_str(self):
         """
-        Test Accesion.species_str()
+        Test Accession.species_str()
         """
         acc = self.create(Accession, species=self.species, code=u'1')
         s = u'Echinocactus grusonii'
@@ -1051,10 +1059,11 @@ class AccessionTests(GardenTestCase):
         self.editor.handle_response(gtk.RESPONSE_OK)
         self.editor.session.close()
 
-    def itest_editor(self):
+    def test_editor(self):
         """
         Interactively test the AccessionEditor
         """
+        raise SkipTest('Not Implemented')
         #donor = self.create(Donor, name=u'test')
         sp2 = Species(genus=self.genus, sp=u'species')
         sp2.synonyms.append(self.species)
@@ -1203,10 +1212,11 @@ class LocationTests(GardenTestCase):
         self.assertEquals(utils.gc_objects_by_type('LocationEditorView'), [],
                           'LocationEditorView not deleted')
 
-    def itest_editor(self):
+    def test_editor(self):
         """
         Interactively test the PlantEditor
         """
+        raise SkipTest('Not Implemented')
         loc = self.create(Location, name=u'some site', code=u'STE')
         editor = LocationEditor(model=loc)
         editor.start()
@@ -1251,7 +1261,8 @@ class InstitutionTests(GardenTestCase):
     # TODO: create a non interactive tests that starts the
     # InstututionEditor and checks that it doesn't leak memory
 
-    def itest_editor(self):
+    def test_editor(self):
+        raise SkipTest('Not Implemented')
         e = InstitutionEditor()
         e.start()
 
@@ -1569,3 +1580,103 @@ class AccessionNotesSerializeTest(GardenTestCase):
             create=False, update=True)
         self.assertTrue(obj is not None)
         self.assertEquals(obj.note, u"url://")
+
+import bauble.search as search
+
+
+class PlantSearchTest(GardenTestCase):
+    def __init__(self, *args):
+        super(PlantSearchTest, self).__init__(*args)
+
+    def setUp(self):
+        super(PlantSearchTest, self).setUp()
+        setUp_data()
+
+    def test_searchbyplantcode(self):
+        raise SkipTest('should really work, please inspect')
+        mapper_search = search.get_strategy('MapperSearch')
+
+        results = mapper_search.search('1.1.1', self.session)
+        self.assertEquals(len(results), 1)
+        p = results.pop()
+        ex = self.session.query(Plant).filter(Plant.id == 1).first()
+        self.assertEqual(p, ex)
+        results = mapper_search.search('2.2.1', self.session)
+        logger.debug(results)
+        self.assertEquals(len(results), 1)
+        p = results.pop()
+        ex = self.session.query(Plant).filter(Plant.id == 2).first()
+        self.assertEqual(p, ex)
+        results = mapper_search.search('2.2.2', self.session)
+        self.assertEquals(len(results), 1)
+        p = results.pop()
+        ex = self.session.query(Plant).filter(Plant.id == 3).first()
+        self.assertEqual(p, ex)
+
+    def test_searchbyaccessioncode(self):
+        mapper_search = search.get_strategy('MapperSearch')
+
+        results = mapper_search.search('2001.1', self.session)
+        self.assertEquals(len(results), 1)
+        a = results.pop()
+        expect = self.session.query(Accession).filter(
+            Accession.id == 1).first()
+        logger.debug("%s, %s" % (a, expect))
+        self.assertEqual(a, expect)
+        results = mapper_search.search('2001.2', self.session)
+        self.assertEquals(len(results), 1)
+        a = results.pop()
+        expect = self.session.query(Accession).filter(
+            Accession.id == 2).first()
+        logger.debug("%s, %s" % (a, expect))
+        self.assertEqual(a, expect)
+
+
+from bauble.plugins.garden.accession import get_next_code
+from bauble.plugins.garden.location import mergevalues
+
+
+class GlobalFunctionsTests(GardenTestCase):
+    def test_get_next_code_first_this_year(self):
+        this_year = str(datetime.date.today().year)
+        self.assertEquals(get_next_code(), this_year + '.0001')
+
+    def test_get_next_code_second_this_year(self):
+        this_year = str(datetime.date.today().year)
+        this_code = get_next_code()
+        acc = Accession(species=self.species, code=this_code)
+        self.session.add(acc)
+        self.session.flush()
+        self.assertEquals(get_next_code(), this_year + '.0002')
+
+    def test_get_next_code_absolute_beginning(self):
+        this_year = str(datetime.date.today().year)
+        self.session.query(Accession).delete()
+        self.session.flush()
+        self.assertEquals(get_next_code(), this_year + '.0001')
+
+    def test_get_next_code_next_with_hole(self):
+        this_year = str(datetime.date.today().year)
+        this_code = this_year + u'.0050'
+        acc = Accession(species=self.species, code=this_code)
+        self.session.add(acc)
+        self.session.flush()
+        self.assertEquals(get_next_code(), this_year + '.0051')
+
+    def test_mergevalues_equal(self):
+        'if the values are equal, return it'
+        self.assertEquals(mergevalues('1', '1', '%s|%s'), '1')
+
+    def test_mergevalues_conflict(self):
+        'if they conflict, return both'
+        self.assertEquals(mergevalues('2', '1', '%s|%s'), '2|1')
+
+    def test_mergevalues_one_empty(self):
+        'if one is empty, return the non empty one'
+        self.assertEquals(mergevalues('2', None, '%s|%s'), '2')
+        self.assertEquals(mergevalues(None, '2', '%s|%s'), '2')
+        self.assertEquals(mergevalues('2', '', '%s|%s'), '2')
+
+    def test_mergevalues_both_empty(self):
+        'if both are empty, return the empty string'
+        self.assertEquals(mergevalues(None, None, '%s|%s'), '')

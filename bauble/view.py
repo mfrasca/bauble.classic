@@ -130,7 +130,7 @@ class InfoExpander(gtk.Expander):
             prefs.prefs[self.expanded_pref] = expander.get_expanded()
             prefs.prefs.save()
 
-    def set_widget_value(self, widget_name, value, markup=False, default=None):
+    def widget_set_value(self, widget_name, value, markup=False, default=None):
         '''
         a shorthand for L{bauble.utils.set_widget_value()}
         '''
@@ -199,9 +199,13 @@ class PropertiesExpander(InfoExpander):
         self.id_data.set_text(str(row.id))
         self.type_data.set_text(str(type(row).__name__))
         self.created_data.set_text(
-            row._created.strftime('%Y-%m-%d %H:%m:%S'))
+            row._created
+            and row._created.strftime('%Y-%m-%d %H:%m:%S')
+            or '')
         self.updated_data.set_text(
-            row._last_updated.strftime('%Y-%m-%d %H:%m:%S'))
+            row._last_updated
+            and row._last_updated.strftime('%Y-%m-%d %H:%m:%S')
+            or '')
 
 
 class InfoBoxPage(gtk.ScrolledWindow):
@@ -628,8 +632,8 @@ class SearchView(pluginmgr.View):
             error_msg = _('Error in search string at column %s') % err.column
         except (BaubleError, AttributeError, Exception, SyntaxError), e:
             logger.debug(traceback.format_exc())
-            error_msg = _('** Error: %s') % utils.xml_safe_utf8(e)
-            error_details_msg = utils.xml_safe_utf8(traceback.format_exc())
+            error_msg = _('** Error: %s') % utils.xml_safe(e)
+            error_details_msg = utils.xml_safe(traceback.format_exc())
 
         if error_msg:
             bauble.gui.show_error_box(error_msg, error_details_msg)
@@ -823,7 +827,7 @@ class SearchView(pluginmgr.View):
             # properties...this usually happens when one of the
             # ViewMeta's get_children() functions return a list of
             # object who's session was closed...we add it here for
-            # performance reasons so we only add it onces its visible
+            # performance reasons so we only add it once it's visible
             if not object_session(value):
                 if value in self.session:
                     # expire the object in the session with the same key
@@ -928,12 +932,12 @@ class SearchView(pluginmgr.View):
                         # because for some unknown reason using the
                         # "selected" variable from the parent scope
                         # will give us the objects but they won't be
-                        # in an session...maybe its a thread thing
+                        # in an session...maybe it's a thread thing
                         values = self.get_selected_values()
                         result = cb(values)
                     except Exception, e:
-                        msg = utils.xml_safe_utf8(str(e))
-                        tb = utils.xml_safe_utf8(traceback.format_exc())
+                        msg = utils.xml_safe(str(e))
+                        tb = utils.xml_safe(traceback.format_exc())
                         utils.message_details_dialog(
                             msg, tb, gtk.MESSAGE_ERROR)
                         logger.warning(traceback.format_exc())
@@ -970,7 +974,7 @@ class SearchView(pluginmgr.View):
         self.session.expire_all()
 
         # the invalidate_str_cache() method are specific to Species
-        # and Accession right now....its a bit of a hack since there's
+        # and Accession right now....it's a bit of a hack since there's
         # no real interface that the method complies to...but it does
         # fix our string caching issues
         def invalidate_cache(model, path, treeiter, data=None):

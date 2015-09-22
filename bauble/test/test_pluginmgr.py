@@ -1,17 +1,39 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
+# Copyright (c) 2012-2015 Mario Frasca <mario@anche.no>
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 #
 # test_pluginmgr.py
 #
 import os
-import sys
+
 import unittest
 
-from pyparsing import *
-from sqlalchemy import *
+import logging
+logger = logging.getLogger(__name__)
+
+#from pyparsing import *
+#from sqlalchemy import *
+#from bauble.view import SearchView
+#from bauble.search import SearchParser, MapperSearch
 
 import bauble
 import bauble.db as db
-from bauble.search import SearchParser, MapperSearch
-from bauble.view import SearchView
 from bauble.test import BaubleTestCase, uri
 import bauble.pluginmgr as pluginmgr
 from bauble.pluginmgr import PluginRegistry
@@ -22,9 +44,11 @@ import bauble.utils as utils
 class A(pluginmgr.Plugin):
     initialized = False
     installed = False
+
     @classmethod
     def init(cls):
         cls.initialized = True
+
     @classmethod
     def install(cls, *args, **kwargs):
         cls.installed = True
@@ -34,9 +58,11 @@ class B(pluginmgr.Plugin):
     depends = ['A']
     initialized = False
     installed = False
+
     @classmethod
     def init(cls):
         cls.initialized = True
+
     @classmethod
     def install(cls, *args, **kwargs):
         cls.installed = True
@@ -46,10 +72,12 @@ class C(pluginmgr.Plugin):
     depends = ['B']
     initialized = False
     installed = False
+
     @classmethod
     def init(cls):
         assert A.initialized and B.initialized
         cls.initialized = True
+
     @classmethod
     def install(cls, *args, **kwargs):
         cls.installed = True
@@ -58,10 +86,12 @@ class C(pluginmgr.Plugin):
 class FailingInitPlugin(pluginmgr.Plugin):
     initialized = False
     installed = False
+
     @classmethod
     def init(cls):
         cls.initialized = True
         raise BaubleError("can't init")
+
     @classmethod
     def install(cls, *args, **kwargs):
         cls.installed = True
@@ -71,9 +101,11 @@ class DependsOnFailingInitPlugin(pluginmgr.Plugin):
     depends = ['FailingInitPlugin']
     initialized = False
     installed = False
+
     @classmethod
     def init(cls):
         cls.initialized = True
+
     @classmethod
     def install(cls, *args, **kwargs):
         cls.installed = True
@@ -82,9 +114,11 @@ class DependsOnFailingInitPlugin(pluginmgr.Plugin):
 class FailingInstallPlugin(pluginmgr.Plugin):
     initialized = False
     installed = False
+
     @classmethod
     def init(cls):
         cls.initialized = True
+
     @classmethod
     def install(cls, *args, **kwargs):
         cls.installed = True
@@ -95,9 +129,11 @@ class DependsOnFailingInstallPlugin(pluginmgr.Plugin):
     depends = ['FailingInstallPlugin']
     initialized = False
     installed = False
+
     @classmethod
     def init(cls):
         cls.initialized = True
+
     @classmethod
     def install(cls, *args, **kwargs):
         cls.installed = True
@@ -116,6 +152,7 @@ class PluginMgrTests(BaubleTestCase):
             @classmethod
             def init(cls):
                 pass
+
             @classmethod
             def install(cls, import_defaults=True):
                 import bauble.paths as paths
@@ -130,7 +167,7 @@ class PluginMgrTests(BaubleTestCase):
                     csv.start([filenames], metadata=db.metadata,
                               force=True)
                 except Exception, e:
-                    error(e)
+                    logger.error(e)
                     raise
                 from bauble.plugins.plants import Family
                 self.assert_(self.session.query(Family).count() == 511)
@@ -144,7 +181,7 @@ class LocalFunctions(unittest.TestCase):
         B.initialized = B.installed = False
         C.initialized = C.installed = False
         bauble.pluginmgr.plugins = {}
-    
+
     def tearDown(self):
         bauble.pluginmgr.plugins = {}
 
@@ -156,7 +193,7 @@ class LocalFunctions(unittest.TestCase):
         bauble.pluginmgr.plugins[C.__name__] = c
         bauble.pluginmgr.plugins[B.__name__] = b
         bauble.pluginmgr.plugins[A.__name__] = a
-        dep, unmet = bauble.pluginmgr._create_dependency_pairs([a,b,c])
+        dep, unmet = bauble.pluginmgr._create_dependency_pairs([a, b, c])
         self.assertEquals(dep, [(a, b), (b, c)])
         self.assertEquals(unmet, {})
 
@@ -167,7 +204,7 @@ class LocalFunctions(unittest.TestCase):
         c.__name__ = 'C'
         bauble.pluginmgr.plugins[C.__name__] = c
         bauble.pluginmgr.plugins[B.__name__] = b
-        dep, unmet = bauble.pluginmgr._create_dependency_pairs([b,c])
+        dep, unmet = bauble.pluginmgr._create_dependency_pairs([b, c])
         self.assertEquals(dep, [(b, c)])
         self.assertEquals(unmet, {'B': ['A']})
 
@@ -210,7 +247,7 @@ class StandalonePluginMgrTests(unittest.TestCase):
         old_dialog = utils.message_details_dialog
         self.invoked = False
 
-        def fake_dialog(a,b,c):
+        def fake_dialog(a, b, c):
             "trap dialog box invocation"
             self.invoked = True
 
@@ -218,8 +255,10 @@ class StandalonePluginMgrTests(unittest.TestCase):
 
         db.open(uri, verify=False)
         db.create(False)
-        bauble.pluginmgr.plugins[FailingInitPlugin.__name__] = FailingInitPlugin()
-        bauble.pluginmgr.plugins[DependsOnFailingInitPlugin.__name__] = DependsOnFailingInitPlugin()
+        bauble.pluginmgr.plugins[
+            FailingInitPlugin.__name__] = FailingInitPlugin()
+        bauble.pluginmgr.plugins[
+            DependsOnFailingInitPlugin.__name__] = DependsOnFailingInitPlugin()
         bauble.pluginmgr.init(force=True)
         self.assertTrue(self.invoked)
         # self.assertFalse(FailingInitPlugin.initialized)  # irrelevant
@@ -231,8 +270,11 @@ class StandalonePluginMgrTests(unittest.TestCase):
 
         db.open(uri, verify=False)
         db.create(False)
-        bauble.pluginmgr.plugins[FailingInstallPlugin.__name__] = FailingInstallPlugin()
-        bauble.pluginmgr.plugins[DependsOnFailingInstallPlugin.__name__] = DependsOnFailingInstallPlugin()
+        bauble.pluginmgr.plugins[
+            FailingInstallPlugin.__name__] = FailingInstallPlugin()
+        bauble.pluginmgr.plugins[
+            DependsOnFailingInstallPlugin.__name__
+            ] = DependsOnFailingInstallPlugin()
         self.assertRaises(BaubleError, bauble.pluginmgr.init, force=True)
 
     def test_install(self):
@@ -263,7 +305,8 @@ class StandalonePluginMgrTests(unittest.TestCase):
         db.open(uri, verify=False)
         db.create(False)
         ## should try to load the A plugin
-        self.assertRaises(KeyError, bauble.pluginmgr.install, (pB, ), force=True)
+        self.assertRaises(KeyError,
+                          bauble.pluginmgr.install, (pB, ), force=True)
 
     def test_dependencies_CA(self):
         "test that loading C will also load A"
@@ -277,7 +320,8 @@ class StandalonePluginMgrTests(unittest.TestCase):
         db.open(uri, verify=False)
         db.create(False)
         ## should try to load the A plugin
-        self.assertRaises(KeyError, bauble.pluginmgr.install, (pC, ), force=True)
+        self.assertRaises(KeyError,
+                          bauble.pluginmgr.install, (pC, ), force=True)
 
 
 class PluginRegistryTests(BaubleTestCase):

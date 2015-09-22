@@ -1,25 +1,46 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
+# Copyright (c) 2012-2015 Mario Frasca <mario@anche.no>
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 #
 # test_bauble.py
 #
 import datetime
 import os
-import sys
-import unittest
 import time
 
-from pyparsing import *
-from sqlalchemy import *
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+from sqlalchemy import (
+    Column, Integer)
 
 import bauble
 import bauble.db as db
 from bauble.btypes import Enum
-from bauble.search import SearchParser
 from bauble.test import BaubleTestCase, check_dupids
 import bauble.meta as meta
 
 """
 Tests for the main bauble module.
 """
+
 
 class BaubleTests(BaubleTestCase):
 
@@ -39,34 +60,31 @@ class BaubleTests(BaubleTestCase):
         db.engine.execute(table.insert(), {"id": 1})
         #debug(t.value)
 
-
     def test_date_type(self):
         """
         Test bauble.types.Date
         """
-        import bauble.prefs as prefs
         dt = bauble.btypes.Date()
 
         bauble.btypes.Date._dayfirst = False
         bauble.btypes.Date._yearfirst = False
         s = '12-30-2008'
         v = dt.process_bind_param(s, None)
-        self.assert_(v.month==12 and v.day==30 and v.year==2008,
+        self.assert_(v.month == 12 and v.day == 30 and v.year == 2008,
                      '%s == %s' % (v, s))
 
         bauble.btypes.Date._dayfirst = True
         bauble.btypes.Date._yearfirst = False
         s = '30-12-2008'
         v = dt.process_bind_param(s, None)
-        self.assert_(v.month==12 and v.day==30 and v.year==2008,
+        self.assert_(v.month == 12 and v.day == 30 and v.year == 2008,
                      '%s == %s' % (v, s))
-
 
         bauble.btypes.Date._dayfirst = False
         bauble.btypes.Date._yearfirst = True
         s = '2008-12-30'
         v = dt.process_bind_param(s, None)
-        self.assert_(v.month==12 and v.day==30 and v.year==2008,
+        self.assert_(v.month == 12 and v.day == 30 and v.year == 2008,
                      '%s == %s' % (v, s))
 
         # TODO: python-dateutil 1.4.1 has a bug where dayfirst=True,
@@ -82,7 +100,6 @@ class BaubleTests(BaubleTestCase):
         # debug(v)
         # self.assert_(v.month==12 and v.day==30 and v.year==2008,
         #              '%s == %s' % (v, s))
-
 
     def test_datetime_type(self):
         """
@@ -117,22 +134,19 @@ class BaubleTests(BaubleTestCase):
         v = dt.process_bind_param(s, None)
         self.assert_(v.isoformat(' ') == result)
 
-
-
     def test_base_table(self):
         """
         Test db.Base is setup correctly
         """
         m = meta.BaubleMeta(name=u'name', value=u'value')
-        table = m.__table__
         self.session.add(m)
         self.session.commit()
         m = self.session.query(meta.BaubleMeta).filter_by(name=u'name').first()
 
         # test that _created and _last_updated were created correctly
-        self.assert_(hasattr(m, '_created') \
+        self.assert_(hasattr(m, '_created')
                      and isinstance(m._created, datetime.datetime))
-        self.assert_(hasattr(m, '_last_updated') \
+        self.assert_(hasattr(m, '_last_updated')
                      and isinstance(m._last_updated, datetime.datetime))
 
         # test that created does not change when the value is updated
@@ -149,8 +163,6 @@ class BaubleTests(BaubleTestCase):
         self.assert_(m._created == created)
         self.assert_(isinstance(m._last_updated, datetime.datetime))
         self.assert_(m._last_updated != last_updated)
-
-
 
     def test_duplicate_ids(self):
         """
@@ -192,3 +204,48 @@ class HistoryTests(BaubleTestCase):
         assert history.table_name == 'family' and history.operation == 'delete'
 
 
+class MVPTests(BaubleTestCase):
+
+    def test_can_programmatically_connect_signals(self):
+        from bauble.editor import (
+            GenericEditorPresenter, GenericEditorView)
+
+        class HandlerDefiningPresenter(GenericEditorPresenter):
+            def on_tag_desc_textbuffer_changed(self, *args):
+                pass
+
+        model = db.History()
+        import tempfile
+        ntf = tempfile.NamedTemporaryFile()
+        ntf.write('''\
+<interface>
+  <requires lib="gtk+" version="2.24"/>
+  <!-- interface-naming-policy toplevel-contextual -->
+  <object class="GtkTextBuffer" id="tag_desc_textbuffer">
+    <signal name="changed" handler="on_tag_desc_textbuffer_changed" swapped="no"/>
+  </object>
+</interface>
+''')
+        ntf.flush()
+        fn = ntf.name
+        view = GenericEditorView(fn)
+        presenter = HandlerDefiningPresenter(model, view)
+        self.assertEquals(
+            len(presenter.view._GenericEditorView__attached_signals), 1)
+        presenter.on_tag_desc_textbuffer_changed()  # avoid uncounted line!
+
+
+class GlobalFunctionsTests(BaubleTestCase):
+    def test_newer_version_on_github(self):
+        import StringIO
+        from bauble import newer_version_on_github
+        stream = StringIO.StringIO('version = "1.0.0"  # comment')
+        self.assertFalse(newer_version_on_github(stream) and True or False)
+        stream = StringIO.StringIO('version = "1.0.99999"  # comment')
+        self.assertTrue(newer_version_on_github(stream) and True or False)
+        stream = StringIO.StringIO('version = "1.0.99999"  # comment')
+        self.assertEquals(newer_version_on_github(stream), '1.0.99999')
+        stream = StringIO.StringIO('version = "1.099999"  # comment')
+        self.assertFalse(newer_version_on_github(stream) and True or False)
+        stream = StringIO.StringIO('version = "1.0.99999-dev"  # comment')
+        self.assertFalse(newer_version_on_github(stream) and True or False)

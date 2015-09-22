@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
 # Copyright (c) 2012-2015 Mario Frasca <mario@anche.no>
 #
@@ -22,7 +24,8 @@ The top level module for Bauble.
 
 import logging
 logger = logging.getLogger(__name__)
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
+consoleLevel = logging.INFO
 
 import imp
 import os
@@ -76,9 +79,9 @@ if main_is_frozen():  # main is frozen
 # make sure we look in the lib path for modules
 sys.path.append(paths.lib_dir())
 
-if False:
-    sys.stderr.write('sys.path: %s\n' % sys.path)
-    sys.stderr.write('PATH: %s\n' % os.environ['PATH'])
+#if False:
+#    sys.stderr.write('sys.path: %s\n' % sys.path)
+#    sys.stderr.write('PATH: %s\n' % os.environ['PATH'])
 
 
 # set SQLAlchemy logging level
@@ -158,7 +161,7 @@ def command_handler(cmd, arg):
         if cmd is None:
             utils.message_dialog(_('No default handler registered'))
         else:
-            utils.message_dialog(_('No command handler for %s' % cmd))
+            utils.message_dialog(_('No command handler for %s') % cmd)
             return
 
     if not isinstance(last_handler, handler_cls):
@@ -177,7 +180,7 @@ def command_handler(cmd, arg):
     try:
         last_handler(cmd, arg)
     except Exception, e:
-        msg = utils.xml_safe_utf8(e)
+        msg = utils.xml_safe(e)
         logger.error('bauble.command_handler(): %s' % msg)
         utils.message_details_dialog(
             msg, traceback.format_exc(), gtk.MESSAGE_ERROR)
@@ -190,19 +193,9 @@ conn_list_pref = "conn.list"
 def newer_version_on_github(input_stream):
     """is there a new patch on github for this production line
 
-    >>> import StringIO
-    >>> stream = StringIO.StringIO('version = "1.0.0"  # comment')
-    >>> newer_version_on_github(stream)
-    False
-    >>> stream = StringIO.StringIO('version = "1.0.99999"  # comment')
-    >>> newer_version_on_github(stream)
-    True
-    >>> stream = StringIO.StringIO('version = "1.099999"  # comment')
-    >>> newer_version_on_github(stream)
-    False
-    >>> stream = StringIO.StringIO('version = "1.0.99999-dev"  # comment')
-    >>> newer_version_on_github(stream)
-    False
+    if the remote version is higher than the running one, return
+    something evaluating to True (possibly the remote version string).
+    otherwise, return something evaluating to False
     """
 
     try:
@@ -217,9 +210,9 @@ def newer_version_on_github(input_stream):
                 return False
             github_patch = github_version.split('.')[2]
             if int(github_patch) > int(version_tuple[2]):
-                return True
+                return github_version
             if int(github_patch) < int(version_tuple[2]):
-                logger.warning("running unreleased version")
+                logger.info("running unreleased version")
     except TypeError:
         logger.warning('TypeError while reading github stream')
     except IndexError:
@@ -229,13 +222,55 @@ def newer_version_on_github(input_stream):
     return False
 
 
+def check_and_notify_new_version():
+    ## check whether there's a newer version on github.  this is executed in
+    ## a different thread, which does nothing or terminates the program.
+    version_on_github = (
+        'https://raw.githubusercontent.com/Bauble/bauble' +
+        '.classic/bauble-%s.%s/bauble/version.py') % version_tuple[:2]
+    try:
+        import urllib2
+        import ssl
+        import gtk
+        github_version_stream = urllib2.urlopen(
+            version_on_github, timeout=5)
+        remote = newer_version_on_github(github_version_stream)
+        if remote:
+            md = gtk.MessageDialog(
+                None, gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_INFO,
+                gtk.BUTTONS_OK_CANCEL,
+                _("new remote version available.\n\n"
+                  "remote version: %(1)s,\n"
+                  "running version: %(2)s.\n\n"
+                  "Cancel to stop and upgrade;\n"
+                  "OK to continue.") %
+                {'1': remote,
+                 '2': version})
+            response = md.run()
+            md.destroy()
+            if response != gtk.RESPONSE_OK:
+                exit(0)
+    except urllib2.URLError:
+        logger.info('connection is slow or down')
+        pass
+    except ssl.SSLError, e:
+        logger.info('SSLError %s while checking for newer version' % e)
+        pass
+    except urllib2.HTTPError:
+        logger.info('HTTPError while checking for newer version')
+        pass
+    except Exception, e:
+        logger.warning('unhandled %s(%s) while checking for newer version'
+                       % type(e), e)
+        pass
+
+
 def main(uri=None):
     """
     Run the main Bauble application.
 
     :param uri:  the URI of the database to connect to.  For more information
-    about database URIs see `<http://www.sqlalchemy.org/docs/05/dbengine.html\
-    #create-engine-url-arguments>`_
+                 about database URIs see `<http://www.sqlalchemy.org/docs/05/dbengine.html#create-engine-url-arguments>`_
 
     :type uri: str
     """
@@ -252,6 +287,10 @@ def main(uri=None):
             print _('Please make sure that GTK_ROOT\\bin is in your PATH.')
         sys.exit(1)
 
+    # create the user directory
+    if not os.path.exists(paths.user_dir()):
+        os.makedirs(paths.user_dir())
+
     # add console root handler, and file root handler, set it at the logging
     # level specified by BAUBLE_LOGGING, or at INFO level.
     filename = os.path.join(paths.user_dir(), 'bauble.log')
@@ -263,6 +302,21 @@ def main(uri=None):
     logging.getLogger().addHandler(consoleHandler)
     fileHandler.setFormatter(formatter)
     consoleHandler.setFormatter(formatter)
+    fileHandler.setLevel(logging.DEBUG)
+    consoleHandler.setLevel(consoleLevel)
+
+    try:
+        # no raven.conf.setup_logging: just standard Python logging
+        from raven import Client
+        from raven.handlers.logging import SentryHandler
+        sentry_client = Client('https://59105d22a4ad49158796088c26bf8e4c:'
+                               '00268114ed47460b94ce2b1b0b2a4a20@'
+                               'app.getsentry.com/45704')
+        handler = SentryHandler(sentry_client)
+        logging.getLogger().addHandler(handler)
+        handler.setLevel(logging.WARNING)
+    except:
+        logger.warning("can't configure sentry client")
 
     import gtk.gdk
     import pygtk
@@ -278,17 +332,13 @@ def main(uri=None):
     from bauble.prefs import prefs
     import bauble.utils as utils
 
-    # create the user directory
-    if not os.path.exists(paths.user_dir()):
-        os.makedirs(paths.user_dir())
-
     # initialize threading
     gobject.threads_init()
 
     try:
         import bauble.db as db
     except Exception, e:
-        utils.message_dialog(utils.xml_safe_utf8(e), gtk.MESSAGE_ERROR)
+        utils.message_dialog(utils.xml_safe(e), gtk.MESSAGE_ERROR)
         sys.exit(1)
 
     # declare module level variables
@@ -299,40 +349,15 @@ def main(uri=None):
     # intialize the user preferences
     prefs.init()
 
-    ## check whether there's a newer version on github.
-    version_on_github = (
-        'https://raw.githubusercontent.com/Bauble/bauble' +
-        '.classic/bauble-%s.%s/bauble/version.py') % version_tuple[:2]
-    try:
-        import urllib2
-        github_version_stream = urllib2.urlopen(
-            version_on_github, timeout=1)
-        if newer_version_on_github(github_version_stream):
-            md = gtk.MessageDialog(
-                None, gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_INFO,
-                gtk.BUTTONS_OK_CANCEL,
-                _("new remote version available.\n"
-                  "Cancel to stop and upgrade; OK to continue."))
-            response = md.run()
-            md.destroy()
-            if response != gtk.RESPONSE_OK:
-                exit(0)
-    except urllib2.URLError:
-        logger.warning('connection is slow or down')
-        pass
-    except urllib2.HTTPError:
-        logger.warning('HTTPError while checking for newer version')
-        pass
+    gobject.idle_add(check_and_notify_new_version)
 
     open_exc = None
     # open default database
     if uri is None:
-        from bauble.connmgr import ConnectionManager
-        default_conn = prefs[conn_default_pref]
+        from bauble.connmgr import start_connection_manager
         while True:
             if not uri or not conn_name:
-                cm = ConnectionManager(default_conn)
-                conn_name, uri = cm.start()
+                conn_name, uri = start_connection_manager()
                 if conn_name is None:
                     quit()
             try:
@@ -342,20 +367,20 @@ def main(uri=None):
                 else:
                     uri = conn_name = None
             except err.VersionError, e:
-                logger.warning(e)
+                logger.warning("%s(%s)" % (type(e), e))
                 db.open(uri, False)
                 break
             except (err.EmptyDatabaseError, err.MetaTableError,
                     err.VersionError, err.TimestampError,
                     err.RegistryError), e:
-                logger.warning(e)
+                logger.info("%s(%s)" % (type(e), e))
                 open_exc = e
                 # reopen without verification so that db.Session and
                 # db.engine, db.metadata will be bound to an engine
                 db.open(uri, False)
                 break
             except err.DatabaseError, e:
-                logger.debug(e)
+                logger.debug("%s(%s)" % (type(e), e))
                 # traceback.format_exc()
                 open_exc = e
                 # break
@@ -403,15 +428,15 @@ def main(uri=None):
                         # set the default connection
                         prefs[conn_default_pref] = conn_name
                     except Exception, e:
-                        utils.message_details_dialog(utils.xml_safe_utf8(e),
+                        utils.message_details_dialog(utils.xml_safe(e),
                                                      traceback.format_exc(),
                                                      gtk.MESSAGE_ERROR)
-                        logger.error(e)
+                        logger.error("%s(%s)" % (type(e), e))
             else:
                 pluginmgr.init()
         except Exception, e:
-            logger.warning(traceback.format_exc())
-            logger.warning(e)
+            logger.warning("%s\n%s(%s)"
+                           % (traceback.format_exc(), type(e), e))
             utils.message_dialog(utils.utf8(e), gtk.MESSAGE_WARNING)
         gtk.gdk.threads_leave()
 

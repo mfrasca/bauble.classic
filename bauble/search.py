@@ -27,11 +27,13 @@ import logging
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
 
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy import Unicode
 from sqlalchemy import UnicodeText
 from sqlalchemy.orm import class_mapper
-from sqlalchemy.orm.properties import ColumnProperty
+from sqlalchemy.orm.properties import (
+    ColumnProperty, RelationshipProperty)
+RelationProperty = RelationshipProperty
 
 import bauble
 from bauble.error import check
@@ -42,6 +44,7 @@ from bauble.i18n import _
 def search(text, session=None):
     results = set()
     for strategy in _search_strategies.values():
+        logger.debug("applying search strategy %s" % strategy)
         results.update(strategy.search(text, session))
     return list(results)
 
@@ -180,6 +183,24 @@ class IdentExpressionToken(object):
                 return q.filter(a.any())
         clause = lambda x: self.operation(a, x)
         return q.filter(clause(self.operands[1].express()))
+
+    def needs_join(self, env):
+        return [self.operands[0].needs_join(env)]
+
+
+class BetweenExpressionAction(object):
+    def __init__(self, t):
+        self.operands = t[0][0::2]  # every second object is an operand
+
+    def __repr__(self):
+        return "(BETWEEN %s %s %s)" % tuple(self.operands)
+
+    def evaluate(self, env):
+        q, a = self.operands[0].evaluate(env)
+        clause_low = lambda low: low <= a
+        clause_high = lambda high: a <= high
+        return q.filter(and_(clause_low(self.operands[1].express()),
+                             clause_high(self.operands[2].express())))
 
     def needs_join(self, env):
         return [self.operands[0].needs_join(env)]
@@ -324,7 +345,7 @@ class DomainExpressionAction(object):
                 self.domain = search_strategy._shorthand[self.domain]
             cls, properties = search_strategy._domains[self.domain]
         except KeyError:
-            raise KeyError(_('Unknown search domain: %s' % self.domain))
+            raise KeyError(_('Unknown search domain: %s') % self.domain)
 
         query = search_strategy._session.query(cls)
 
@@ -362,6 +383,7 @@ class DomainExpressionAction(object):
 class ValueListAction(object):
 
     def __init__(self, t):
+        logger.debug("ValueListAction::__init__(%s)" % t)
         self.values = t[0]
 
     def __repr__(self):
@@ -372,16 +394,12 @@ class ValueListAction(object):
 
     def invoke(self, search_strategy):
         """
-        Called when the parser hits a value_list token
+        Called when the whole search string is a value list.
 
         Search with a list of values is the broadest search and
         searches all the mapper and the properties configured with
         add_meta()
         """
-        # debug('values: %s' % tokens)
-        # debug('  s: %s' % s)
-        # debug('  loc: %s' % loc)
-        # debug('  toks: %s' % tokens)
 
         # make searches case-insensitive, in postgres use ilike,
         # in other use upper()
@@ -390,7 +408,6 @@ class ValueListAction(object):
 
         result = set()
         for cls, columns in search_strategy._properties.iteritems():
-            q = search_strategy._session.query(cls)  # prepares SELECT
             column_cross_value = [(c, v) for c in columns
                                   for v in self.express()]
             # as of SQLAlchemy>=0.4.2 we convert the value to a unicode
@@ -398,24 +415,36 @@ class ValueListAction(object):
             # to avoid the "Unicode type received non-unicode bind param"
 
             def unicol(col, v):
-                mapper = class_mapper(cls)
-                if isinstance(mapper.c[col].type, (Unicode, UnicodeText)):
+                table = class_mapper(cls)
+                if isinstance(table.c[col].type, (Unicode, UnicodeText)):
                     return unicode(v)
                 else:
                     return v
 
-            mapper = class_mapper(cls)
-            q = q.filter(or_(*[like(mapper, c, unicol(c, v))
+            table = class_mapper(cls)
+            q = search_strategy._session.query(cls)  # prepares SELECT
+            q = q.filter(or_(*[like(table, c, unicol(c, v))
                                for c, v in column_cross_value]))
             result.update(q.all())
 
+        logger.debug("result is now %s" % result)
+
+        def replace(i):
+            try:
+                return i.replacement()
+            except:
+                return i
+        result = set([replace(i) for i in result])
+        logger.debug("result is now %s" % result)
         return result
 
 
-from pyparsing import (Word, alphas8bit, removeQuotes, delimitedList, Regex,
-                       OneOrMore, oneOf, alphas, alphanums, Group, Literal,
-                       stringEnd, Keyword, quotedString,
-                       infixNotation, opAssoc, Forward)
+from pyparsing import (
+    Word, alphas8bit, removeQuotes, delimitedList, Regex,
+    OneOrMore, oneOf, alphas, alphanums, Group, Literal,
+    CaselessLiteral, WordStart, WordEnd,
+    stringEnd, Keyword, quotedString,
+    infixNotation, opAssoc, Forward)
 
 
 class SearchParser(object):
@@ -427,7 +456,7 @@ class SearchParser(object):
         ).setParseAction(NumericToken)('number')
     unquoted_string = Word(alphanums + alphas8bit + '%.-_*;:')
     string_value = (
-        unquoted_string | quotedString.setParseAction(removeQuotes)
+        quotedString.setParseAction(removeQuotes) | unquoted_string
         ).setParseAction(StringToken)('string')
 
     none_token = Literal('None').setParseAction(NoneToken)
@@ -457,9 +486,10 @@ class SearchParser(object):
         | (domain + binop + domain_values + stringEnd)
         ).setParseAction(DomainExpressionAction)('domain_expression')
 
-    AND_ = Literal("AND") | Literal("&&")
-    OR_ = Literal("OR") | Literal("||")
-    NOT_ = Literal("NOT") | Literal('!')
+    AND_ = WordStart() + (CaselessLiteral("AND") | Literal("&&")) + WordEnd()
+    OR_ = WordStart() + (CaselessLiteral("OR") | Literal("||")) + WordEnd()
+    NOT_ = WordStart() + (CaselessLiteral("NOT") | Literal('!')) + WordEnd()
+    BETWEEN_ = WordStart() + CaselessLiteral("BETWEEN") + WordEnd()
 
     query_expression = Forward()('filter')
     identifier = Group(delimitedList(Word(alphas+'_', alphanums+'_'),
@@ -469,8 +499,11 @@ class SearchParser(object):
         | (
             Literal('(') + query_expression + Literal(')')
         ).setParseAction(ParenthesisedQuery))
+    between_expression = Group(
+        identifier + BETWEEN_ + value + AND_ + value
+        ).setParseAction(BetweenExpressionAction)
     query_expression << infixNotation(
-        ident_expression,
+        (ident_expression | between_expression),
         [(NOT_, 1, opAssoc.RIGHT, SearchNotAction),
          (AND_, 2, opAssoc.LEFT,  SearchAndAction),
          (OR_,  2, opAssoc.LEFT,  SearchOrAction)])
@@ -506,6 +539,7 @@ class SearchStrategy(object):
         Return an iterator that iterates over mapped classes retrieved
         from the search.
         '''
+        logger.debug('SearchStrategy "%s" %s)' % (text, session))
         pass
 
 
@@ -546,6 +580,9 @@ class MapperSearch(SearchStrategy):
                            search by default
         """
 
+        logger.debug('%s.add_meta(%s, %s, %s)' %
+                     (self, domain, cls, properties))
+
         check(isinstance(properties, list),
               _('MapperSearch.add_meta(): '
                 'default_columns argument must be list'))
@@ -557,7 +594,7 @@ class MapperSearch(SearchStrategy):
             for d in domain[1:]:
                 self._shorthand[d] = domain[0]
         else:
-            self._domains[d] = cls, properties
+            self._domains[domain] = cls, properties
         self._properties[cls] = properties
 
     @classmethod
@@ -897,7 +934,7 @@ class ExpressionRow(object):
             if active_iter:
                 value = model[active_iter][0]
         else:
-            # assume its a gtk.Entry or other widget with a text property
+            # assume it's a gtk.Entry or other widget with a text property
             value = self.value_widget.props.text.strip()
         and_or = ''
         if self.and_or_combo:
@@ -912,17 +949,45 @@ class QueryBuilder(gtk.Dialog):
     def __init__(self, parent=None):
         """
         """
-        super(QueryBuilder, self).\
-            __init__(title=_("Query Builder"), parent=parent,
-                     flags=gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
-                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                              gtk.STOCK_OK, gtk.RESPONSE_OK))
+        super(QueryBuilder, self).__init__(
+            title=_("Query Builder"), parent=parent,
+            flags=gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+            buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+                     gtk.STOCK_OK, gtk.RESPONSE_OK))
 
         self.vbox.props.spacing = 15
         self.expression_rows = []
         self.mapper = None
         self._first_choice = True
         self.set_response_sensitive(gtk.RESPONSE_OK, False)
+        self.domain_map = MapperSearch.get_domain_classes().copy()
+
+        frame = gtk.Frame(_("Search Domain"))
+        self.vbox.pack_start(frame, expand=False, fill=False)
+        self.domain_combo = gtk.combo_box_new_text()
+        frame.add(self.domain_combo)
+        for key in sorted(self.domain_map.keys()):
+            self.domain_combo.append_text(key)
+        self.domain_combo.insert_text(0, _("Choose a search domain..."))
+        self.domain_combo.set_active(0)
+
+        self.domain_combo.connect('changed', self.on_domain_combo_changed)
+
+        frame = gtk.Frame(_("Expressions"))
+        self.expressions_table = gtk.Table()
+        self.expressions_table.props.column_spacing = 10
+        frame.add(self.expressions_table)
+        self.vbox.pack_start(frame, expand=False, fill=False)
+
+        # add button to add additional expression rows
+        self.add_button = gtk.Button()
+        self.add_button.props.sensitive = False
+        img = gtk.image_new_from_stock(gtk.STOCK_ADD, gtk.ICON_SIZE_BUTTON)
+        self.add_button.props.image = img
+        self.add_button.connect("clicked", lambda w: self.add_expression_row())
+        align = gtk.Alignment(0, 0, 0, 0)
+        align.add(self.add_button)
+        self.vbox.pack_end(align, fill=False, expand=False)
 
     def on_domain_combo_changed(self, *args):
         """
@@ -947,7 +1012,6 @@ class QueryBuilder(gtk.Dialog):
         """
         valid = False
         for row in self.expression_rows:
-            sensitive = False
             value = None
             if isinstance(row.value_widget, gtk.Entry):
                 value = row.value_widget.props.text
@@ -984,35 +1048,6 @@ class QueryBuilder(gtk.Dialog):
         self.expressions_table.show_all()
 
     def start(self):
-        self.domain_map = MapperSearch.get_domain_classes().copy()
-
-        frame = gtk.Frame(_("Search Domain"))
-        self.vbox.pack_start(frame, expand=False, fill=False)
-        self.domain_combo = gtk.combo_box_new_text()
-        frame.add(self.domain_combo)
-        for key in sorted(self.domain_map.keys()):
-            self.domain_combo.append_text(key)
-        self.domain_combo.insert_text(0, _("Choose a search domain..."))
-        self.domain_combo.set_active(0)
-
-        self.domain_combo.connect('changed', self.on_domain_combo_changed)
-
-        frame = gtk.Frame(_("Expressions"))
-        self.expressions_table = gtk.Table()
-        self.expressions_table.props.column_spacing = 10
-        frame.add(self.expressions_table)
-        self.vbox.pack_start(frame, expand=False, fill=False)
-
-        # add button to add additional expression rows
-        self.add_button = gtk.Button()
-        self.add_button.props.sensitive = False
-        img = gtk.image_new_from_stock(gtk.STOCK_ADD, gtk.ICON_SIZE_BUTTON)
-        self.add_button.props.image = img
-        self.add_button.connect("clicked", lambda w: self.add_expression_row())
-        align = gtk.Alignment(0, 0, 0, 0)
-        align.add(self.add_button)
-        self.vbox.pack_end(align, fill=False, expand=False)
-
         self.vbox.show_all()
         response = self.run()
         self.hide()
@@ -1030,12 +1065,3 @@ class QueryBuilder(gtk.Dialog):
             if expr:
                 query.append(expr)
         return ' '.join(query)
-
-
-if __name__ == '__main__':
-    import bauble.test
-    uri = 'sqlite:///:memory:'
-    bauble.test.init_bauble(uri)
-    qb = QueryBuilder()
-    qb.start()
-    logger.debug(qb.get_query())

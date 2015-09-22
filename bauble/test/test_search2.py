@@ -1,4 +1,22 @@
-# encoding: utf-8
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
+# Copyright (c) 2012-2015 Mario Frasca <mario@anche.no>
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
 from bauble import search
@@ -173,7 +191,7 @@ integer_value = Regex(r'[-]?\d+').setParseAction(NumericIntegerAction)
 float_value = Regex(r'[-]?\d+(\.\d*)?([eE]\d+)?').setParseAction(NumericFloatAction)
 value_chars = Word(alphas + alphas8bit, alphanums + alphas8bit + '%.-_*;:')
 string_value = (value_chars | quotedString.setParseAction(removeQuotes)).setParseAction(StringAction)
-# value can contain any string once its quoted
+# value can contain any string once it's quoted
 
 value = string_value | integer_value | float_value
 value_list = (string_value ^ delimitedList(string_value) ^ OneOrMore(string_value))

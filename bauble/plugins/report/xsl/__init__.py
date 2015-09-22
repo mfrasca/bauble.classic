@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
+# Copyright (c) 2012-2015 Mario Frasca <mario@anche.no>
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 #
 # xsl report formatter package
 #
@@ -31,7 +50,7 @@ from bauble.plugins.report import get_all_plants, get_all_species, \
 import bauble.prefs as prefs
 import bauble.utils as utils
 import bauble.utils.desktop as desktop
-from bauble.utils import xml_safe_utf8
+from bauble.utils import xml_safe
 
 if sys.platform == "win32":
     fop_cmd = 'fop.bat'
@@ -103,44 +122,44 @@ class SpeciesABCDAdapter(ABCDAdapter):
         return ""
 
     def get_DateLastEdited(self):
-        return utils.xml_safe_utf8(self.species._last_updated.isoformat())
+        return utils.xml_safe(self.species._last_updated.isoformat())
 
     def get_family(self):
-        return xml_safe_utf8(self.species.genus.family)
+        return xml_safe(self.species.genus.family)
 
     def get_FullScientificNameString(self, authors=True):
         s = Species.str(self.species, authors=authors,markup=False)
-        return xml_safe_utf8(s)
+        return xml_safe(s)
 
     def get_GenusOrMonomial(self):
-        return xml_safe_utf8(str(self.species.genus))
+        return xml_safe(str(self.species.genus))
 
     def get_FirstEpithet(self):
-        return xml_safe_utf8(str(self.species.sp))
+        return xml_safe(str(self.species.sp))
 
     def get_AuthorTeam(self):
         author = self.species.sp_author
         if author is None:
             return None
         else:
-            return xml_safe_utf8(author)
+            return xml_safe(author)
 
     def get_InformalNameString(self):
         vernacular_name = self.species.default_vernacular_name
         if vernacular_name is None:
             return None
         else:
-            return xml_safe_utf8(vernacular_name)
+            return xml_safe(vernacular_name)
 
     def get_Notes(self):
         if not self.species.notes:
             return None
         notes = []
         for note in self.species.notes:
-            notes.append(dict(date=xml_safe_utf8(note.date.isoformat()),
-                              user=xml_safe_utf8(note.user),
-                              category=xml_safe_utf8(note.category),
-                              note=utils.xml_safe_utf8(note.note)))
+            notes.append(dict(date=xml_safe(note.date.isoformat()),
+                              user=xml_safe(note.user),
+                              category=xml_safe(note.category),
+                              note=utils.xml_safe(note.note)))
         return utf8(notes)
 
     def extra_elements(self, unit):
@@ -168,16 +187,16 @@ class AccessionABCDAdapter(SpeciesABCDAdapter):
 
 
     def get_UnitID(self):
-        return xml_safe_utf8(str(self.accession))
+        return xml_safe(str(self.accession))
 
 
     def get_FullScientificNameString(self, authors=True):
         s = self.accession.species_str(authors=authors , markup=False)
-        return xml_safe_utf8(s)
+        return xml_safe(s)
 
 
     def get_DateLastEdited(self):
-        return utils.xml_safe_utf8(self.accession._last_updated.isoformat())
+        return utils.xml_safe(self.accession._last_updated.isoformat())
 
 
     def get_Notes(self):
@@ -185,11 +204,11 @@ class AccessionABCDAdapter(SpeciesABCDAdapter):
             return None
         notes = []
         for note in self.accession.notes:
-            notes.append(dict(date=xml_safe_utf8(note.date.isoformat()),
-                              user=xml_safe_utf8(note.user),
-                              category=xml_safe_utf8(note.category),
-                              note=xml_safe_utf8(note.note)))
-        return xml_safe_utf8(notes)
+            notes.append(dict(date=xml_safe(note.date.isoformat()),
+                              user=xml_safe(note.user),
+                              category=xml_safe(note.category),
+                              note=xml_safe(note.note)))
+        return xml_safe(notes)
 
 
     def extra_elements(self, unit):
@@ -204,7 +223,7 @@ class AccessionABCDAdapter(SpeciesABCDAdapter):
 
         if self.accession.source and self.accession.source.collection:
             collection = self.accession.source.collection
-            utf8 = xml_safe_utf8
+            utf8 = xml_safe
             gathering = ABCDElement(unit, 'Gathering')
 
             if collection.collectors_code:
@@ -215,7 +234,7 @@ class AccessionABCDAdapter(SpeciesABCDAdapter):
             if collection.date:
                 date_time = ABCDElement(gathering, 'DateTime')
                 ABCDElement(date_time, 'DateText',
-                            xml_safe_utf8(collection.date.isoformat()))
+                            xml_safe(collection.date.isoformat()))
 
             if collection.collector:
                 agents = ABCDElement(gathering, 'Agents')
@@ -274,11 +293,11 @@ class PlantABCDAdapter(AccessionABCDAdapter):
 
 
     def get_UnitID(self):
-        return xml_safe_utf8(str(self.plant))
+        return xml_safe(str(self.plant))
 
 
     def get_DateLastEdited(self):
-        return utils.xml_safe_utf8(self.plant._last_updated.isoformat())
+        return utils.xml_safe(self.plant._last_updated.isoformat())
 
 
     def get_Notes(self):
@@ -286,19 +305,19 @@ class PlantABCDAdapter(AccessionABCDAdapter):
             return None
         notes = []
         for note in self.plant.notes:
-            notes.append(dict(date=utils.xml_safe_utf8(note.date.isoformat()),
-                              user=xml_safe_utf8(note.user),
-                              category=xml_safe_utf8(note.category),
-                              note=xml_safe_utf8(note.note)))
-        return xml_safe_utf8(str(notes))
+            notes.append(dict(date=utils.xml_safe(note.date.isoformat()),
+                              user=xml_safe(note.user),
+                              category=xml_safe(note.category),
+                              note=xml_safe(note.note)))
+        return xml_safe(str(notes))
 
 
     def extra_elements(self, unit):
         bg_unit = ABCDElement(unit, 'BotanicalGardenUnit')
         ABCDElement(bg_unit, 'AccessionSpecimenNumbers',
-                    text=xml_safe_utf8(self.plant.quantity))
+                    text=xml_safe(self.plant.quantity))
         ABCDElement(bg_unit, 'LocationInGarden',
-                    text=xml_safe_utf8(str(self.plant.location)))
+                    text=xml_safe(str(self.plant.location)))
         if self.for_labels:
             if self.species.label_distribution:
                 etree.SubElement(unit, 'distribution').text=\

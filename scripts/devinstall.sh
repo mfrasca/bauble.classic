@@ -1,17 +1,17 @@
 #!/bin/bash
 
 PROBLEMS=''
-if ! gettext --version >/dev/null 2>&1; then
+if ! msgfmt --version >/dev/null 2>&1; then
     PROBLEMS="$PROBLEMS gettext"
 fi
 if ! python -c 'import gtk' >/dev/null 2>&1; then
-    PROBLEMS="$PROBLEMS pygtk"
+    PROBLEMS="$PROBLEMS python-gtk2"
 fi
 if ! git help >/dev/null 2>&1; then
     PROBLEMS="$PROBLEMS git"
 fi
 if ! virtualenv --help >/dev/null 2>&1; then
-    PROBLEMS="$PROBLEMS virtualenv"
+    PROBLEMS="$PROBLEMS python-virtualenv"
 fi
 if ! xslt-config --help >/dev/null 2>&1; then
     PROBLEMS="$PROBLEMS libxslt1-dev"
@@ -19,6 +19,11 @@ fi
 PYTHONHCOUNT=$(find /usr/include/python* /usr/local/include/python* -name Python.h 2>/dev/null | wc -l)
 if [ "$PYTHONHCOUNT" = "0" ]; then
     PROBLEMS="$PROBLEMS python-all-dev"
+fi
+SETUPTOOLS=$(pip show setuptools | grep Version | cut -f2 -d:)
+EXPRESSION=$(echo "$SETUPTOOLS" | cut -d- -f1 | cut -d. -f1-2)" <= 0.6"
+if [ $(echo $EXPRESSION | bc) -eq 1 ]; then
+    echo "your setuptools are really old. expect trouble."
 fi
 
 if [ "$PROBLEMS" != "" ]; then
@@ -46,19 +51,18 @@ else
     git checkout bauble-1.0
 fi
 
-mkdir $HOME/.virtualenvs >/dev/null 2>&1
+mkdir -p $HOME/.virtualenvs
 virtualenv $HOME/.virtualenvs/bacl --system-site-packages
-find $HOME/.virtualenvs/bacl -name "*.pyc" -execdir rm {} \;
-find $HOME/.virtualenvs/bacl -name "*.pth" -execdir rm {} \;
-mkdir $HOME/.virtualenvs/bacl/share >/dev/null 2>&1
-mkdir $HOME/.bauble >/dev/null 2>&1
+find $HOME/.virtualenvs/bacl -name "*.pyc" -or -name "*.pth" -execdir rm {} \;
+mkdir -p $HOME/.virtualenvs/bacl/share
+mkdir -p $HOME/.bauble
 source $HOME/.virtualenvs/bacl/bin/activate
 
 pip install setuptools pip --upgrade
 
 python setup.py build
 python setup.py install
-mkdir $HOME/bin 2>/dev/null
+mkdir -p $HOME/bin 2>/dev/null
 cat <<EOF > $HOME/bin/bauble
 #!/bin/bash
 

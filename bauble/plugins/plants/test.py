@@ -26,11 +26,12 @@ import sys
 
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import IntegrityError
+from nose import SkipTest
 
 import bauble.utils as utils
 import bauble.db as db
 from bauble.plugins.plants.species import (
-    Species, VernacularName, SpeciesSynonym, SpeciesEditor,
+    Species, VernacularName, SpeciesSynonym, edit_species,
     DefaultVernacularName, SpeciesDistribution, SpeciesNote)
 from bauble.plugins.plants.family import (
     Family, FamilySynonym, FamilyEditor, FamilyNote)
@@ -65,10 +66,12 @@ if sys.platform == 'win32':
     Species.hybrid_char = 'x'
 
 
-family_test_data = ({'id': 1, 'family': u'Orchidaceae'},
-                    {'id': 2, 'family': u'Leguminosae',
-                     'qualifier': u's. str.'},
-                    {'id': 3, 'family': u'Polypodiaceae'})
+family_test_data = (
+    {'id': 1, 'family': u'Orchidaceae'},
+    {'id': 2, 'family': u'Leguminosae', 'qualifier': u's. str.'},
+    {'id': 3, 'family': u'Polypodiaceae'},
+    {'id': 4, 'family': u'Solanaceae'},
+    )
 
 family_note_test_data = (
     {'id': 1, 'family_id': 1, 'category': u'CITES', 'note': u'II'},
@@ -81,66 +84,65 @@ genus_test_data = (
     {'id': 4, 'genus': u'Campyloneurum', 'family_id': 3},
     {'id': 5, 'genus': u'Paphiopedilum', 'family_id': 1},
     {'id': 6, 'genus': u'Laelia', 'family_id': 1},
+    {'id': 7, 'genus': u'Brugmansia', 'family_id': 4},
     )
 
 genus_note_test_data = (
     {'id': 1, 'genus_id': 5, 'category': u'CITES', 'note': u'I'},
     )
 
-species_test_data = ({'id': 1, 'sp': u'variabilis', 'genus_id': 1,
-                      'sp_author': u'Bateman ex Lindl.'},
-                     {'id': 2, 'sp': u'cochleata', 'genus_id': 2,
-                      'sp_author': u'(L.) Lem\xe9e'},
-                     {'id': 3, 'sp': u'precatorius', 'genus_id': 3,
-                      'sp_author': u'L.'},
-                     {'id': 4, 'sp': u'alapense', 'genus_id': 4,
-                      'hybrid': True, 'sp_author': u'F\xe9e'},
-                     {'id': 5, 'sp': u'cochleata', 'genus_id': 2,
-                      'sp_author': u'(L.) Lem\xe9e',
-                      'infrasp1_rank': u'var.', 'infrasp1': u'cochleata'},
-                     {'id': 6, 'sp': u'cochleata', 'genus_id': 2,
-                      'sp_author': u'(L.) Lem\xe9e',
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Black Night'},
-                     {'id': 7, 'sp': u'precatorius', 'genus_id': 3,
-                      'sp_author': u'L.', 'cv_group': u'SomethingRidiculous'},
-                     {'id': 8, 'sp': u'precatorius', 'genus_id': 3,
-                      'sp_author': u'L.',
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Hot Rio Nights',
-                      'cv_group': u'SomethingRidiculous'},
-                     {'id': 9, 'sp': u'generalis', 'genus_id': 1,
-                      'hybrid': True,
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Red'},
-                     {'id': 10, 'sp': u'generalis', 'genus_id': 1,
-                      'hybrid': True, 'sp_author': u'L.',
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Red',
-                      'cv_group': u'SomeGroup'},
-                     {'id': 11, 'sp': u'generalis', 'genus_id': 1,
-                      'sp_qual': u'agg.'},
-                     {'id': 12, 'genus_id': 1, 'cv_group': u'SomeGroup'},
-                     {'id': 13, 'genus_id': 1,
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Red'},
-                     {'id': 14, 'genus_id': 1,
-                      'infrasp1_rank': u'cv.', 'infrasp1': u'Red & Blue'},
-                     {'id': 15, 'sp': u'cochleata', 'genus_id': 2,
-                      'sp_author': u'L.',
-                      'infrasp1_rank': u'subsp.', 'infrasp1': u'cochleata',
-                      'infrasp1_author': u'L.',
-                      'infrasp2_rank': u'var.', 'infrasp2': u'cochleata',
-                      'infrasp2_author': u'L.',
-                      'infrasp3_rank': u'cv.', 'infrasp3': u'Black',
-                      'infrasp3_author': u'L.'},
-                     {'id': 16, 'genus_id': 1, 'sp': u'test',
-                      'infrasp1_rank': u'subsp.', 'infrasp1': u'test',
-                      'cv_group': u'SomeGroup'},
-                     {'id': 17, 'genus_id': 5, 'sp': u'adductum',
-                      'author': u'Asher'},
-                     {'id': 18, 'genus_id': 6, 'sp': u'lobata',
-                      'author': u'H.J. Veitch'},
-                     {'id': 19, 'genus_id': 6, 'sp': u'grandiflora',
-                      'author': u'Lindl.'},
-                     {'id': 20, 'genus_id': 2, 'sp': u'fragrans',
-                      'author': u'Dressler'},
-                     )
+species_test_data = (
+    {'id': 1, 'sp': u'variabilis', 'genus_id': 1,
+     'sp_author': u'Bateman ex Lindl.'},
+    {'id': 2, 'sp': u'cochleata', 'genus_id': 2,
+     'sp_author': u'(L.) Lem\xe9e'},
+    {'id': 3, 'sp': u'precatorius', 'genus_id': 3,
+     'sp_author': u'L.'},
+    {'id': 4, 'sp': u'alapense', 'genus_id': 4,
+     'hybrid': True, 'sp_author': u'F\xe9e'},
+    {'id': 5, 'sp': u'cochleata', 'genus_id': 2,
+     'sp_author': u'(L.) Lem\xe9e',
+     'infrasp1_rank': u'var.', 'infrasp1': u'cochleata'},
+    {'id': 6, 'sp': u'cochleata', 'genus_id': 2,
+     'sp_author': u'(L.) Lem\xe9e',
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Black Night'},
+    {'id': 7, 'sp': u'precatorius', 'genus_id': 3,
+     'sp_author': u'L.', 'cv_group': u'SomethingRidiculous'},
+    {'id': 8, 'sp': u'precatorius', 'genus_id': 3,
+     'sp_author': u'L.',
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Hot Rio Nights',
+     'cv_group': u'SomethingRidiculous'},
+    {'id': 9, 'sp': u'generalis', 'genus_id': 1,
+     'hybrid': True,
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Red'},
+    {'id': 10, 'sp': u'generalis', 'genus_id': 1,
+     'hybrid': True, 'sp_author': u'L.',
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Red',
+     'cv_group': u'SomeGroup'},
+    {'id': 11, 'sp': u'generalis', 'genus_id': 1,
+     'sp_qual': u'agg.'},
+    {'id': 12, 'genus_id': 1, 'cv_group': u'SomeGroup'},
+    {'id': 13, 'genus_id': 1,
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Red'},
+    {'id': 14, 'genus_id': 1,
+     'infrasp1_rank': u'cv.', 'infrasp1': u'Red & Blue'},
+    {'id': 15, 'sp': u'cochleata', 'genus_id': 2,
+     'sp_author': u'L.',
+     'infrasp1_rank': u'subsp.', 'infrasp1': u'cochleata',
+     'infrasp1_author': u'L.',
+     'infrasp2_rank': u'var.', 'infrasp2': u'cochleata',
+     'infrasp2_author': u'L.',
+     'infrasp3_rank': u'cv.', 'infrasp3': u'Black',
+     'infrasp3_author': u'L.'},
+    {'id': 16, 'genus_id': 1, 'sp': u'test',
+     'infrasp1_rank': u'subsp.', 'infrasp1': u'test',
+     'cv_group': u'SomeGroup'},
+    {'id': 17, 'genus_id': 5, 'sp': u'adductum', 'author': u'Asher'},
+    {'id': 18, 'genus_id': 6, 'sp': u'lobata', 'author': u'H.J. Veitch'},
+    {'id': 19, 'genus_id': 6, 'sp': u'grandiflora', 'author': u'Lindl.'},
+    {'id': 20, 'genus_id': 2, 'sp': u'fragrans', 'author': u'Dressler'},
+    {'id': 21, 'genus_id': 7, 'sp': u'arborea', 'author': u'Lagerh.'},
+    )
 
 species_note_test_data = (
     {'id': 1, 'species_id': 18, 'category': u'CITES', 'note': u'I'},
@@ -204,11 +206,12 @@ species_markup_authors_map = {
 sp_synonym_test_data = ({'id': 1, 'synonym_id': 1, 'species_id': 2},
                         )
 
-vn_test_data = ({'id': 1, 'name': u'SomeName', 'language': u'English',
-                 'species_id': 1},
-                {'id': 2, 'name': u'SomeName 2', 'language': u'English',
-                 'species_id': 1},
-                )
+vn_test_data = (
+    {'id': 1, 'name': u'SomeName', 'language': u'English', 'species_id': 1},
+    {'id': 2, 'name': u'SomeName 2', 'language': u'English', 'species_id': 1},
+    {'id': 3, 'name': u'Floripondio', 'language': u'es', 'species_id': 21},
+    {'id': 4, 'name': u'Toé', 'language': u'agr', 'species_id': 21},
+    )
 
 test_data_table_control = (
     (Family, family_test_data),
@@ -371,10 +374,11 @@ class FamilyTests(PlantTestCase):
         f.qualifier = 's. lat.'
         self.assert_(str(f) == 'fam s. lat.')
 
-    def itest_editor(self):
+    def test_editor(self):
         """
         Interactively test the PlantEditor
         """
+        raise SkipTest('Not Implemented')
         #loc = self.create(Family, name=u'some site')
         fam = Family(family='some family')
         editor = FamilyEditor(model=fam)
@@ -474,10 +478,11 @@ class GenusTests(PlantTestCase):
         """
         pass
 
-    def itest_editor(self):
+    def test_editor(self):
         """
         Interactively test the PlantEditor
         """
+        raise SkipTest('Not Implemented')
         #loc = self.create(Genus, name=u'some site')
         fam = Family(family=u'family')
         fam2 = Family(family=u'family2')
@@ -496,6 +501,86 @@ class GenusTests(PlantTestCase):
             'GenusEditorView not deleted'
 
 
+class GenusSynonymyTests(PlantTestCase):
+
+    def setUp(self):
+        super(GenusSynonymyTests, self).setUp()
+        f = self.session.query(Family).filter(Family.family == u'Orchidaceae'
+                                              ).one()
+        bu = Genus(family=f, genus=u'Bulbophyllum')  # accepted
+        zy = Genus(family=f, genus=u'Zygoglossum')  # synonym
+        bu.synonyms.append(zy)
+        self.session.add_all([f, bu, zy])
+        self.session.commit()
+
+    def test_forward_synonyms(self):
+        "a taxon has a list of synonyms"
+        bu = self.session.query(
+            Genus).filter(
+            Genus.genus == u'Bulbophyllum').one()
+        zy = self.session.query(
+            Genus).filter(
+            Genus.genus == u'Zygoglossum').one()
+        self.assertEquals(bu.synonyms, [zy])
+        self.assertEquals(zy.synonyms, [])
+
+    def test_backward_synonyms(self):
+        "synonymy is used to get the accepted taxon"
+        bu = self.session.query(
+            Genus).filter(
+            Genus.genus == u'Bulbophyllum').one()
+        zy = self.session.query(
+            Genus).filter(
+            Genus.genus == u'Zygoglossum').one()
+        self.assertEquals(zy.accepted, bu)
+        self.assertEquals(bu.accepted, None)
+
+    def test_synonymy_included_in_as_dict(self):
+        bu = self.session.query(
+            Genus).filter(
+            Genus.genus == u'Bulbophyllum').one()
+        zy = self.session.query(
+            Genus).filter(
+            Genus.genus == u'Zygoglossum').one()
+        self.assertTrue('accepted' not in bu.as_dict())
+        self.assertTrue('accepted' in zy.as_dict())
+        self.assertEquals(zy.as_dict()['accepted'],
+                          bu.as_dict(recurse=False))
+
+    def test_define_accepted(self):
+        # notice that same test should be also in Species and Family
+        bu = self.session.query(
+            Genus).filter(
+            Genus.genus == u'Bulbophyllum').one()
+        f = self.session.query(
+            Family).filter(
+            Family.family == u'Orchidaceae').one()
+        he = Genus(family=f, genus=u'Henosis')  # one more synonym
+        self.session.add(he)
+        self.session.commit()
+        self.assertEquals(len(bu.synonyms), 1)
+        self.assertFalse(he in bu.synonyms)
+        he.accepted = bu
+        self.assertEquals(len(bu.synonyms), 2)
+        self.assertTrue(he in bu.synonyms)
+
+    def test_can_redefine_accepted(self):
+        # Altamiranoa Rose used to refer to Villadia Rose for its accepted
+        # name, it is now updated to Sedum L.
+
+        ## T_0
+        claceae = Family(family=u'Crassulaceae')  # J. St.-Hil.
+        villa = Genus(family=claceae, genus=u'Villadia', author=u'Rose')
+        alta = Genus(family=claceae, genus=u'Altamiranoa', author=u'Rose')
+        alta.accepted = villa
+        self.session.add_all([claceae, alta, villa])
+        self.session.commit()
+
+        sedum = Genus(family=claceae, genus=u'Sedum', author=u'L.')
+        alta.accepted = sedum
+        self.session.commit()
+
+
 class SpeciesTests(PlantTestCase):
 
     def setUp(self):
@@ -504,7 +589,8 @@ class SpeciesTests(PlantTestCase):
     def tearDown(self):
         super(SpeciesTests, self).tearDown()
 
-    def itest_editor(self):
+    def test_editor(self):
+        raise SkipTest('Not Implemented')
         # import default geography data
         import bauble.paths as paths
         default_path = os.path.join(
@@ -522,10 +608,8 @@ class SpeciesTests(PlantTestCase):
         self.session.add(f)
         self.session.commit()
         sp = Species(genus=g, sp=u'sp')
-        e = SpeciesEditor(model=sp)
-        e.start()
-        del e
-        assert utils.gc_objects_by_type('SpeciesEditor') == [], \
+        edit_species(model=sp)
+        assert utils.gc_objects_by_type('SpeciesEditorMenuItem') == [], \
             'SpeciesEditor not deleted'
         assert utils.gc_objects_by_type('SpeciesEditorPresenter') == [], \
             'SpeciesEditorPresenter not deleted'
@@ -684,7 +768,6 @@ class SpeciesTests(PlantTestCase):
         def syn_str(id1, id2, isit='not'):
             sp1 = load_sp(id1)
             sp2 = load_sp(id2)
-            print sp2
             return '%s(%s).synonyms: %s' % \
                    (sp1, sp1.id,
                     str(map(lambda s: '%s(%s)' %
@@ -854,7 +937,10 @@ class FromAndToDictTest(PlantTestCase):
         pol = Family.retrieve_or_create(
             self.session, {'rank': 'family',
                            'epithet': 'Polypodiaceae'})
-        self.assertEquals(set(all_families), set([orc, pol, leg]))
+        sol = Family.retrieve_or_create(
+            self.session, {'rank': 'family',
+                           'epithet': 'Solanaceae'})
+        self.assertEquals(set(all_families), set([orc, pol, leg, sol]))
 
     def test_grabbing_same_params_same_output_existing(self):
         orc1 = Family.retrieve_or_create(
@@ -877,7 +963,8 @@ class FromAndToDictTest(PlantTestCase):
         ses_families = self.session.query(Family).all()
         self.assertTrue(fab in ses_families)
 
-    def xtest_where_can_object_be_found_before_commit(self):  # disabled
+    def test_where_can_object_be_found_before_commit(self):  # disabled
+        raise SkipTest('Not Implemented')
         fab = Family.retrieve_or_create(
             self.session, {'rank': 'family',
                            'epithet': 'Fabaceae'})
@@ -1034,6 +1121,64 @@ class FromAndToDict_create_update_test(PlantTestCase):
         self.assertTrue(obj is not None)
         self.assertEquals(obj.author, 'Schltr.')
 
+    def test_vernacular_name_as_dict(self):
+        bra = self.session.query(Species).filter(Species.id == 21).first()
+        vn_bra = self.session.query(VernacularName).filter(
+            VernacularName.language == u'agr',
+            VernacularName.species == bra).all()
+        self.assertEquals(vn_bra[0].as_dict(),
+                          {'object': 'vernacular_name',
+                           'name': u'Toé',
+                           'language': u'agr',
+                           'species': 'Brugmansia arborea'})
+        vn_bra = self.session.query(VernacularName).filter(
+            VernacularName.language == u'es',
+            VernacularName.species == bra).all()
+        self.assertEquals(vn_bra[0].as_dict(),
+                          {'object': 'vernacular_name',
+                           'name': u'Floripondio',
+                           'language': u'es',
+                           'species': 'Brugmansia arborea'})
+
+    def test_vernacular_name_nocreate_noupdate_noexisting(self):
+        # do not create if not existing
+        obj = VernacularName.retrieve_or_create(
+            self.session, {'object': u'vernacular_name',
+                           'language': u'nap',
+                           'species': u'Brugmansia arborea'},
+            create=False)
+        self.assertEquals(obj, None)
+
+    def test_vernacular_name_nocreate_noupdateeq_existing(self):
+        ## retrieve same object, we only give the keys
+        obj = VernacularName.retrieve_or_create(
+            self.session, {'object': u'vernacular_name',
+                           'language': u'agr',
+                           'species': u'Brugmansia arborea'},
+            create=False, update=False)
+        self.assertTrue(obj is not None)
+        self.assertEquals(obj.name, 'Toé')
+
+    def test_vernacular_name_nocreate_noupdatediff_existing(self):
+        ## do not update object with new data
+        obj = VernacularName.retrieve_or_create(
+            self.session, {'object': 'vernacular_name',
+                           'language': u'agr',
+                           'name': u'wronge',
+                           'species': u'Brugmansia arborea'},
+            create=False, update=False)
+        self.assertEquals(obj.name, 'Toé')
+
+    def test_vernacular_name_nocreate_updatediff_existing(self):
+        ## update object in self.session
+        obj = VernacularName.retrieve_or_create(
+            self.session, {'object': 'vernacular_name',
+                           'language': u'agr',
+                           'name': u'wronge',
+                           'species': u'Brugmansia arborea'},
+            create=False, update=True)
+        self.assertEquals(obj.name, 'wronge')
+
 
 class CitesStatus_test(PlantTestCase):
     "we can retrieve the cites status as defined in family-genus-species"
@@ -1132,3 +1277,85 @@ class ConservationStatus_test(PlantTestCase):
                            'epithet': u'fragrans'},
             create=False, update=False)
         self.assertEquals(obj.conservation, u'LC')
+
+
+from editor import GenericModelViewPresenterEditor, MockView
+
+
+class PresenterTest(PlantTestCase):
+    def test_canreeditobject(self):
+        species = Species.retrieve_or_create(
+            self.session, {'object': 'taxon',
+                           'ht-rank': 'genus',
+                           'ht-epithet': u'Paphiopedilum',
+                           'rank': 'species',
+                           'epithet': u'adductum'},
+            create=False, update=False)
+        presenter = GenericModelViewPresenterEditor(species, MockView())
+        species.author = u'wrong'
+        presenter.commit_changes()
+        species.author = u'Asher'
+        presenter.commit_changes()
+
+    def test_cantinsertsametwice(self):
+        'while binomial name in view matches database item, warn user'
+
+        raise SkipTest('Not Implemented')  # presenter uses view internals
+        from species_editor import SpeciesEditorPresenter
+        model = Species.retrieve_or_create(
+            self.session, {'object': 'taxon',
+                           'ht-rank': 'genus',
+                           'ht-epithet': u'Laelia',
+                           'rank': 'species',
+                           'epithet': u'lobata'},
+            create=False, update=False)
+        presenter = SpeciesEditorPresenter(model, MockView())
+        presenter.on_text_entry_changed('sp_species_entry', 'grandiflora')
+
+
+from bauble.plugins.plants.species import (
+    species_markup_func, vernname_markup_func,
+    species_get_kids, vernname_get_kids)
+
+
+class GlobalFunctionsTest(PlantTestCase):
+    def test_species_markup_func(self):
+        eCo = Species.retrieve_or_create(
+            self.session, {'object': 'taxon',
+                           'ht-rank': 'genus',
+                           'ht-epithet': u'Maxillaria',
+                           'rank': 'species',
+                           'epithet': u'variabilis'},
+            create=False, update=False)
+        model = Species.retrieve_or_create(
+            self.session, {'object': 'taxon',
+                           'ht-rank': 'genus',
+                           'ht-epithet': u'Laelia',
+                           'rank': 'species',
+                           'epithet': u'lobata'},
+            create=False, update=False)
+        first, second = species_markup_func(eCo)
+        self.assertEquals(first, u'<i>Maxillaria</i> <i>variabilis</i>')
+        self.assertEquals(second, u'Orchidaceae -- SomeName, SomeName 2')
+        first, second = species_markup_func(model)
+        self.assertEquals(first, u'<i>Laelia</i> <i>lobata</i>')
+        self.assertEquals(second, u'Orchidaceae')
+
+    def test_species_markup_func_none(self):
+        first, second = species_markup_func(None)
+        self.assertEquals(first, u'...')
+        self.assertEquals(second, u'...')
+
+    def test_vername_markup_func(self):
+        vName = self.session.query(VernacularName).filter_by(id=1).one()
+        first, second = vernname_markup_func(vName)
+        self.assertEquals(second, u'<i>Maxillaria</i> <i>variabilis</i>')
+        self.assertEquals(first, u'SomeName')
+
+    def test_species_get_kids(self):
+        mVa = self.session.query(Species).filter_by(id=1).one()
+        self.assertEquals(species_get_kids(mVa), [])
+
+    def test_vernname_get_kids(self):
+        vName = self.session.query(VernacularName).filter_by(id=1).one()
+        self.assertEquals(vernname_get_kids(vName), [])

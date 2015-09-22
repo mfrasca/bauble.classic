@@ -1,7 +1,27 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2008-2010 Brett Adams
+# Copyright 2015 Mario Frasca <mario@anche.no>.
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 #
 # test_search.py
 #
 import unittest
+from nose import SkipTest
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,22 +50,27 @@ parse_results = Results()
 
 parser = search.SearchParser()
 
+
 class SearchParserTests(unittest.TestCase):
     error_msg = lambda me, s, v, e:  '%s: %s == %s' % (s, v, e)
 
-    def test_query_expression_token(self):
+    def test_query_expression_token_UPPER(self):
         s = 'domain where col=value'
         #debug(s)
-        parseresult = parser.query.parseString(s)
+        parser.query.parseString(s)
 
         s = 'domain where relation.col=value'
-        parseresult = parser.query.parseString(s)
+        parser.query.parseString(s)
 
         s = 'domain where relation.relation.col=value'
-        parseresult = parser.query.parseString(s)
+        parser.query.parseString(s)
 
         s = 'domain where relation.relation.col=value AND col2=value2'
-        parseresult = parser.query.parseString(s)
+        parser.query.parseString(s)
+
+    def test_query_expression_token_LOWER(self):
+        s = 'domain where relation.relation.col=value and col2=value2'
+        parser.query.parseString(s)
 
     def test_statement_token(self):
         pass
@@ -149,12 +174,17 @@ class SearchParserTests(unittest.TestCase):
         "check the join steps"
 
         env = None
-        results = parser.statement.parseString("plant where accession.species.id=44")
-        self.assertEquals(results.statement.content.filter.needs_join(env), [['accession', 'species']])
+        results = parser.statement.parseString("plant where accession.species."
+                                               "id=44")
+        self.assertEquals(results.statement.content.filter.needs_join(env),
+                          [['accession', 'species']])
         results = parser.statement.parseString("plant where accession.id=44")
-        self.assertEquals(results.statement.content.filter.needs_join(env), [['accession']])
-        results = parser.statement.parseString("plant where accession.id=4 OR accession.species.id=3")
-        self.assertEquals(results.statement.content.filter.needs_join(env), [['accession'], ['accession', 'species']])
+        self.assertEquals(results.statement.content.filter.needs_join(env),
+                          [['accession']])
+        results = parser.statement.parseString("plant where accession.id=4 OR "
+                                               "accession.species.id=3")
+        self.assertEquals(results.statement.content.filter.needs_join(env),
+                          [['accession'], ['accession', 'species']])
 
     def test_value_list_token(self):
         """value_list: should return all values
@@ -201,7 +231,6 @@ class SearchParserTests(unittest.TestCase):
 
 
 class SearchTests(BaubleTestCase):
-
     def __init__(self, *args):
         super(SearchTests, self).__init__(*args)
 
@@ -299,7 +328,8 @@ class SearchTests(BaubleTestCase):
         self.assertTrue(isinstance(mapper_search, search.MapperSearch))
 
         # search cls.column
-        results = mapper_search.search('genus where genus=genus1', self.session)
+        results = mapper_search.search('genus where genus=genus1',
+                                       self.session)
         self.assertEquals(len(results), 1)
         f = list(results)[0]
         self.assertTrue(isinstance(f, Genus))
@@ -585,17 +615,111 @@ class SearchTests(BaubleTestCase):
         results = mapper_search.search(s, self.session)
         self.assertEqual(results, set([pp]))
 
+    def test_between_evaluate(self):
+        'use BETWEEN value and value'
+        Family = self.Family
+        Genus = self.Genus
+        from bauble.plugins.plants.species_model import Species
+        from bauble.plugins.garden.accession import Accession
+        #from bauble.plugins.garden.location import Location
+        #from bauble.plugins.garden.plant import Plant
+        family2 = Family(family=u'family2')
+        g2 = Genus(family=family2, genus=u'genus2')
+        f3 = Family(family=u'fam3', qualifier=u's. lat.')
+        g3 = Genus(family=f3, genus=u'Ixora')
+        sp = Species(sp=u"coccinea", genus=g3)
+        ac = Accession(species=sp, code=u'1979.0001')
+        self.session.add_all([family2, g2, f3, g3, sp, ac])
+        self.session.commit()
+
+        mapper_search = search.get_strategy('MapperSearch')
+        self.assertTrue(isinstance(mapper_search, search.MapperSearch))
+
+        s = 'accession where code between "1978" and "1980"'
+        results = mapper_search.search(s, self.session)
+        self.assertEqual(results, set([ac]))
+        s = 'accession where code between "1980" and "1980"'
+        results = mapper_search.search(s, self.session)
+        self.assertEqual(results, set())
+
+    def test_search_by_query_synonyms(self):
+        """SynonymSearch strategy gives all synonyms of given taxon."""
+        Family = self.Family
+        Genus = self.Genus
+        family2 = Family(family=u'family2')
+        g2 = Genus(family=family2, genus=u'genus2')
+        f3 = Family(family=u'fam3', qualifier=u's. lat.')
+        g3 = Genus(family=f3, genus=u'Ixora')
+        g4 = Genus(family=f3, genus=u'Schetti')
+        self.session.add_all([family2, g2, f3, g3, g4])
+        g4.accepted = g3
+        self.session.commit()
+
+        mapper_search = search.get_strategy('SynonymSearch')
+
+        s = 'Schetti'
+        results = mapper_search.search(s, self.session)
+        self.assertEqual(results, [g3])
+
+    def test_search_by_query_binomial(self):
+        """can use genus_species binomial identification"""
+
+        raise SkipTest
+        Family = self.Family
+        Genus = self.Genus
+        from bauble.plugins.plants.species_model import Species
+        family2 = Family(family=u'family2')
+        g2 = Genus(family=family2, genus=u'genus2')
+        f3 = Family(family=u'fam3', qualifier=u's. lat.')
+        g3 = Genus(family=f3, genus=u'Ixora')
+        sp = Species(sp=u"coccinea", genus=g3)
+        self.session.add_all([family2, g2, f3, g3, sp])
+        self.session.commit()
+
+        mapper_search = search.get_strategy('MapperSearch')
+        self.assertTrue(isinstance(mapper_search, search.MapperSearch))
+
+        s = '"Ixora coccinea"'
+        results = mapper_search.search(s, self.session)
+        self.assertEqual(results, set([sp]))
+
+    def test_search_by_query_vernacural(self):
+        """can find species by vernacular name"""
+
+        Family = self.Family
+        Genus = self.Genus
+        from bauble.plugins.plants.species_model import Species
+        from bauble.plugins.plants.species_model import VernacularName
+        family2 = Family(family=u'family2')
+        g2 = Genus(family=family2, genus=u'genus2')
+        f3 = Family(family=u'fam3', qualifier=u's. lat.')
+        g3 = Genus(family=f3, genus=u'Ixora')
+        sp = Species(sp=u"coccinea", genus=g3)
+        vn = VernacularName(name=u"coral rojo", language=u"es", species=sp)
+        self.session.add_all([family2, g2, f3, g3, sp, vn])
+        self.session.commit()
+
+        mapper_search = search.get_strategy('MapperSearch')
+        self.assertTrue(isinstance(mapper_search, search.MapperSearch))
+
+        s = "rojo"
+        results = mapper_search.search(s, self.session)
+        self.assertEqual(results, set([sp]))
+
 
 class QueryBuilderTests(BaubleTestCase):
 
-    def itest_gui(self):
+    def test_cancreatequerybuilder(self):
+        search.QueryBuilder()
+
+    def test_emptyisinvalid(self):
         qb = search.QueryBuilder()
-        qb.start()
-        logger.debug(qb.get_query())
+        self.assertFalse(qb.validate())
 
 
 class BuildingSQLStatements(BaubleTestCase):
-    from bauble.search import SearchParser
+    import bauble.search
+    SearchParser = bauble.search.SearchParser
 
     def test_canfindspeciesfromgenus(self):
         'can find species from genus'
@@ -603,47 +727,100 @@ class BuildingSQLStatements(BaubleTestCase):
         text = u'species where species.genus=genus1'
         sp = self.SearchParser()
         results = sp.parse_string(text)
-        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE (species.genus = 'genus1')")
+        self.assertEqual(
+            str(results.statement),
+            "SELECT * FROM species WHERE (species.genus = 'genus1')")
 
     def test_canuselogicaloperators(self):
         'can use logical operators'
 
         sp = self.SearchParser()
-        results = sp.parse_string('species where species.genus=genus1 OR species.sp=name AND species.genus.family.family=name')
-        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE ((species.genus = 'genus1') OR ((species.sp = 'name') AND (species.genus.family.family = 'name')))")
+        results = sp.parse_string('species where species.genus=genus1 OR '
+                                  'species.sp=name AND species.genus.family'
+                                  '.family=name')
+        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE "
+                         "((species.genus = 'genus1') OR ((species.sp = 'name'"
+                         ") AND (species.genus.family.family = 'name')))")
 
         sp = self.SearchParser()
-        results = sp.parse_string('species where species.genus=genus1 || species.sp=name && species.genus.family.family=name')
-        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE ((species.genus = 'genus1') OR ((species.sp = 'name') AND (species.genus.family.family = 'name')))")
+        results = sp.parse_string('species where species.genus=genus1 || '
+                                  'species.sp=name && species.genus.family.'
+                                  'family=name')
+        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE "
+                         "((species.genus = 'genus1') OR ((species.sp = 'name'"
+                         ") AND (species.genus.family.family = 'name')))")
 
     def test_canfindfamilyfromgenus(self):
         'can find family from genus'
 
         sp = self.SearchParser()
         results = sp.parse_string('family where family.genus=genus1')
-        self.assertEqual(str(results.statement), "SELECT * FROM family WHERE (family.genus = 'genus1')")
+        self.assertEqual(str(results.statement), "SELECT * FROM family WHERE ("
+                         "family.genus = 'genus1')")
 
     def test_canfindgenusfromfamily(self):
         'can find genus from family'
 
         sp = self.SearchParser()
         results = sp.parse_string('genus where genus.family=family2')
-        self.assertEqual(str(results.statement), "SELECT * FROM genus WHERE (genus.family = 'family2')")
+        self.assertEqual(str(results.statement), "SELECT * FROM genus WHERE ("
+                         "genus.family = 'family2')")
 
     def test_canfindplantbyaccession(self):
         'can find plant from the accession id'
 
         sp = self.SearchParser()
         results = sp.parse_string('plant where accession.species.id=113')
-        self.assertEqual(str(results.statement), 'SELECT * FROM plant WHERE (accession.species.id = 113.0)')
+        self.assertEqual(str(results.statement), 'SELECT * FROM plant WHERE ('
+                         'accession.species.id = 113.0)')
 
     def test_canuseNOToperator(self):
         'can use the NOT operator'
 
         sp = self.SearchParser()
-        results = sp.parse_string('species where NOT species.genus.family.family=name')
-        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE NOT (species.genus.family.family = 'name')")
-        results = sp.parse_string('species where ! species.genus.family.family=name')
-        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE NOT (species.genus.family.family = 'name')")
-        results = sp.parse_string('species where family=1 OR family=2 AND NOT genus.id=3')
-        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE ((family = 1.0) OR ((family = 2.0) AND NOT (genus.id = 3.0)))")
+        results = sp.parse_string('species where NOT species.genus.family.'
+                                  'family=name')
+        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE "
+                         "NOT (species.genus.family.family = 'name')")
+        results = sp.parse_string('species where ! species.genus.family.family'
+                                  '=name')
+        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE "
+                         "NOT (species.genus.family.family = 'name')")
+        results = sp.parse_string('species where family=1 OR family=2 AND NOT '
+                                  'genus.id=3')
+        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE "
+                         "((family = 1.0) OR ((family = 2.0) AND NOT (genus.id"
+                         " = 3.0)))")
+
+    def test_canuse_lowercase_operators(self):
+        'can use the operators in lower case'
+
+        sp = self.SearchParser()
+        results = sp.parse_string('species where not species.genus.family.'
+                                  'family=name')
+        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE "
+                         "NOT (species.genus.family.family = 'name')")
+        results = sp.parse_string('species where ! species.genus.family.family'
+                                  '=name')
+        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE "
+                         "NOT (species.genus.family.family = 'name')")
+        results = sp.parse_string('species where family=1 or family=2 and not '
+                                  'genus.id=3')
+        self.assertEqual(str(results.statement), "SELECT * FROM species WHERE "
+                         "((family = 1.0) OR ((family = 2.0) AND NOT (genus.id"
+                         " = 3.0)))")
+
+    def test_notes_is_not_not_es(self):
+        'acknowledges word boundaries'
+
+        sp = self.SearchParser()
+        results = sp.parse_string('species where notes.id!=0')
+        self.assertEqual(str(results.statement),
+                         "SELECT * FROM species WHERE (notes.id != 0.0)")
+
+    def test_between_just_parse(self):
+        'use BETWEEN value and value'
+        sp = self.SearchParser()
+        results = sp.parse_string('species where id between 0 and 1')
+        self.assertEqual(str(results.statement),
+                         "SELECT * FROM species WHERE (BETWEEN id 0.0 1.0)")

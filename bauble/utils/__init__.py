@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
 # Copyright (c) 2015 Mario Frasca <mario@anche.no>
 #
@@ -134,18 +136,22 @@ class BuilderWidgets(dict):
         '''
         w = self.builder.get_object(name)
         if not w:
-            raise KeyError(_('%(widget_name)s not in glade file') %
-                           {'widget_name': name})
+            raise KeyError(
+                _('no widget named "%(widget_name)s" in glade file') %
+                {'widget_name': name})
         return w
 
     def __getattr__(self, name):
         '''
         :param name:
         '''
+        if name == '_builder_':
+            return self.builder
         w = self.builder.get_object(name)
         if not w:
-            raise AttributeError(_('%(widget_name)s not in glade file') %
-                                 {'widget_name': name})
+            raise KeyError(
+                _('no widget named "%(widget_name)s" in glade file') %
+                {'widget_name': name})
         return w
 
     def remove_parent(self, widget):
@@ -266,6 +272,36 @@ def combo_get_value_iter(combo, value, cmp=lambda row, value: row[0] == value):
     return matches[0]
 
 
+def get_widget_value(widget, index=0):
+    '''
+    :param widget: an instance of gtk.Widget
+    :param index: the row index to use for those widgets who use a model
+
+    .. note:: any values passed in for widgets that expect a string will call
+      the values __str__ method
+    '''
+
+    if isinstance(widget, gtk.Label):
+        return utf8(widget.get_text())
+    elif isinstance(widget, gtk.TextView):
+        return utf8(widget.get_buffer().get_text())
+    elif isinstance(widget, gtk.Entry):
+        return utf8(widget.get_text())
+    elif isinstance(widget, gtk.ComboBox):
+        if isinstance(widget, gtk.ComboBoxEntry):
+            return utf8(widget.child.props.text)
+    elif isinstance(widget,
+                    (gtk.ToggleButton, gtk.CheckButton, gtk.RadioButton)):
+        return widget.get_active()
+    elif isinstance(widget, gtk.Button):
+        return utf8(widget.props.label)
+
+    else:
+        raise TypeError('utils.set_widget_value(): Don\'t know how to handle '
+                        'the widget type %s with name %s' %
+                        (type(widget), widget.name))
+
+
 def set_widget_value(widget, value, markup=False, default=None, index=0):
     '''
     :param widget: an instance of gtk.Widget
@@ -307,6 +343,8 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
             widget.set_text(utf8(value))
     elif isinstance(widget, gtk.TextView):
         widget.get_buffer().set_text(str(value))
+    elif isinstance(widget, gtk.TextBuffer):
+        widget.set_text(str(value))
     elif isinstance(widget, gtk.Entry):
         widget.set_text(utf8(value))
     elif isinstance(widget, gtk.ComboBox):
@@ -314,8 +352,8 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
         treeiter = None
         if not widget.get_model():
             logger.warning(
-                'utils.set_widget_value(): '
-                'combo doesn\'t have a model: %s' % widget.get_name())
+                "utils.set_widget_value(): combo doesn't have a model: %s" %
+                gtk.Buildable.get_name(widget))
         else:
             treeiter = combo_get_value_iter(
                 widget, value, cmp=lambda row, value: row[index] == value)
@@ -327,6 +365,10 @@ def set_widget_value(widget, value, markup=False, default=None, index=0):
             widget.child.props.text = value or ''
     elif isinstance(widget,
                     (gtk.ToggleButton, gtk.CheckButton, gtk.RadioButton)):
+        from types import StringTypes
+        if (isinstance(widget, gtk.CheckButton)
+                and isinstance(value, StringTypes)):
+            value = (value == gtk.Buildable.get_name(widget))
         if value is True:
             widget.set_inconsistent(False)
             widget.set_active(True)
@@ -665,8 +707,6 @@ def to_unicode(obj, encoding='utf-8'):
     object it will not try to decode it to converted it to <encoding>
     but will just return the original obj
     """
-    logger.debug('utils.to_unicode((%s)%s, "%s")' %
-                 (type(obj), obj, encoding))
     if isinstance(obj, basestring):
         if not isinstance(obj, unicode):
             obj = unicode(obj, encoding)

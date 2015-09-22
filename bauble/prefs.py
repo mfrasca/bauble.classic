@@ -31,6 +31,8 @@ import bauble.db as db
 import bauble.paths as paths
 import bauble.pluginmgr as pluginmgr
 
+testing = False  # set this to True when testing
+
 """
 The prefs module exposes an API for getting and setting user
 preferences in the Bauble config file.
@@ -206,19 +208,23 @@ class _prefs(dict):
             return True
         return False
 
-    def save(self):
+    def save(self, force=False):
+        if testing and not force:
+            return
         try:
             f = open(self._filename, "w+")
             self.config.write(f)
             f.close()
         except Exception:
             msg = _("Bauble can't save your user preferences. \n\nPlease "
-                    "check the file permissions of your config file:\n %s"
-                    % self._filename)
+                    "check the file permissions of your config file:\n %s") \
+                % self._filename
             if bauble.gui is not None and bauble.gui.window is not None:
                 import bauble.utils as utils
                 utils.message_dialog(msg, type=gtk.MESSAGE_ERROR,
                                      parent=bauble.gui.window)
+            else:
+                logger.error(msg)
 
 
 # TODO: remember pane sizes

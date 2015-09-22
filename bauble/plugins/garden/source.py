@@ -49,7 +49,7 @@ import bauble.paths as paths
 
 def coll_markup_func(coll):
     acc = coll.source.accession
-    safe = utils.xml_safe_utf8
+    safe = utils.xml_safe
     return '%s - <small>%s</small>' %  \
         (safe(acc), safe(acc.species_str())), safe(coll)
 
@@ -93,7 +93,7 @@ def source_detail_edit_callback(details):
 def source_detail_remove_callback(details):
     detail = details[0]
     s = '%s: %s' % (detail.__class__.__name__, str(detail))
-    msg = _("Are you sure you want to remove %s?") % utils.xml_safe_utf8(s)
+    msg = _("Are you sure you want to remove %s?") % utils.xml_safe(s)
     if not utils.yes_no_dialog(msg):
         return
     try:
@@ -102,7 +102,7 @@ def source_detail_remove_callback(details):
         session.delete(obj)
         session.commit()
     except Exception, e:
-        msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
+        msg = _('Could not delete.\n\n%s') % utils.xml_safe(e)
         utils.message_details_dialog(msg, traceback.format_exc(),
                                      type=gtk.MESSAGE_ERROR)
     finally:
@@ -294,16 +294,16 @@ class SourceDetailEditorPresenter(editor.GenericEditorPresenter):
         validator = editor.UnicodeOrNoneValidator()
         for widget, field in self.widget_to_field_map.iteritems():
             self.assign_simple_handler(widget, field, validator)
-        self.__dirty = False
+        self._dirty = False
 
     def set_model_attr(self, field, value, validator=None):
         super(SourceDetailEditorPresenter, self).\
             set_model_attr(field, value, validator)
-        self.__dirty = True
+        self._dirty = True
         self.refresh_sensitivity()
 
     def dirty(self):
-        return self.__dirty
+        return self._dirty
 
     def refresh_sensitivity(self):
         sensitive = False
@@ -315,9 +315,9 @@ class SourceDetailEditorPresenter(editor.GenericEditorPresenter):
         for widget, field in self.widget_to_field_map.iteritems():
             logger.debug('contact refresh(%s, %s=%s)' %
                          (widget, field, getattr(self.model, field)))
-            self.view.set_widget_value(widget, getattr(self.model, field))
+            self.view.widget_set_value(widget, getattr(self.model, field))
 
-        self.view.set_widget_value(
+        self.view.widget_set_value(
             'source_type_combo',
             dict(source_type_values)[self.model.source_type],
             index=1)
@@ -363,14 +363,14 @@ class SourceDetailEditor(editor.GenericModelViewPresenterEditor):
                     self.commit_changes()
                     self._committed.append(self.model)
             except DBAPIError, e:
-                msg = _('Error committing changes.\n\n%s'
-                        % utils.xml_safe_utf8(e.orig))
+                msg = _('Error committing changes.\n\n%s') % \
+                    utils.xml_safe(e.orig)
                 utils.message_details_dialog(msg, str(e), gtk.MESSAGE_ERROR)
                 return False
             except Exception, e:
                 msg = _('Unknown error when committing changes. See the '
-                        'details for more information.\n\n%s'
-                        % utils.xml_safe_utf8(e))
+                        'details for more information.\n\n%s') % \
+                    utils.xml_safe(e)
                 utils.message_details_dialog(msg, traceback.format_exc(),
                                              gtk.MESSAGE_ERROR)
                 return False
@@ -511,7 +511,7 @@ class CollectionPresenter(editor.ChildPresenter):
             add_button.set_sensitive(True)
         gobject.idle_add(_init_geo)
 
-        self.__dirty = False
+        self._dirty = False
 
     def set_region(self, menu_item, geo_id):
         geography = self.session.query(Geography).get(geo_id)
@@ -525,7 +525,7 @@ class CollectionPresenter(editor.ChildPresenter):
         """
         super(CollectionPresenter, self).set_model_attr(
             field, value, validator)
-        self.__dirty = True
+        self._dirty = True
         if self.model.locale is None or self.model.locale in ('', u''):
             self.add_problem(self.PROBLEM_INVALID_LOCALE)
         else:
@@ -547,7 +547,7 @@ class CollectionPresenter(editor.ChildPresenter):
         raise Exception('CollectionPresenter cannot be started')
 
     def dirty(self):
-        return self.__dirty
+        return self._dirty
 
     def refresh_view(self):
         from bauble.plugins.garden.accession import latitude_to_dms, \
@@ -558,7 +558,7 @@ class CollectionPresenter(editor.ChildPresenter):
             if value is not None and field == 'date':
                 value = '%s/%s/%s' % (value.day, value.month,
                                       '%04d' % value.year)
-            self.view.set_widget_value(widget, value)
+            self.view.widget_set_value(widget, value)
 
         latitude = self.model.latitude
         if latitude is not None:
@@ -777,7 +777,7 @@ class PropagationChooserPresenter(editor.ChildPresenter):
         super(PropagationChooserPresenter, self).__init__(model, view)
         self.parent_ref = weakref.ref(parent)
         self.session = session
-        self.__dirty = False
+        self._dirty = False
 
         self.refresh_view()
 
@@ -787,11 +787,11 @@ class PropagationChooserPresenter(editor.ChildPresenter):
 
         def on_toggled(cell, path, data=None):
             prop = None
-            if not cell.get_active():  # its not active so we make it active
+            if not cell.get_active():  # it's not active so we make it active
                 treeview = self.view.widgets.source_prop_treeview
                 prop = treeview.get_model()[path][0]
             self.model.plant_propagation = prop
-            self.__dirty = True
+            self._dirty = True
             self.parent_ref().refresh_sensitivity()
 
         self.view.connect_after(cell, 'toggled', on_toggled)
@@ -874,7 +874,7 @@ class PropagationChooserPresenter(editor.ChildPresenter):
         cell.props.text = prop.get_summary()
 
     def dirty(self):
-        return self.__dirty
+        return self._dirty
 
 
 from bauble.view import InfoBox, InfoExpander
@@ -895,22 +895,22 @@ class GeneralSourceDetailExpander(InfoExpander):
     def update(self, row):
         #from textwrap import TextWrapper
         #wrapper = TextWrapper(width=50, subsequent_indent='  ')
-        self.set_widget_value('sd_name_data', '<big>%s</big>' %
-                              utils.xml_safe_utf8(row.name), markup=True)
+        self.widget_set_value('sd_name_data', '<big>%s</big>' %
+                              utils.xml_safe(row.name), markup=True)
         source_type = ''
         if row.source_type:
-            source_type = utils.xml_safe_utf8(row.source_type)
-        self.set_widget_value('sd_type_data', source_type)
+            source_type = utils.xml_safe(row.source_type)
+        self.widget_set_value('sd_type_data', source_type)
 
         description = ''
         if row.description:
-            description = utils.xml_safe_utf8(row.description)
-        self.set_widget_value('sd_desc_data', description)
+            description = utils.xml_safe(row.description)
+        self.widget_set_value('sd_desc_data', description)
 
         source = Source.__table__
         nacc = select([source.c.id], source.c.source_detail_id == row.id).\
             count().execute().fetchone()[0]
-        self.set_widget_value('sd_nacc_data', nacc)
+        self.widget_set_value('sd_nacc_data', nacc)
 
 
 class SourceDetailInfoBox(InfoBox):

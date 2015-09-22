@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
+# Copyright (c) 2012-2015 Mario Frasca <mario@anche.no>
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 #
 # picasa plugin
 #
@@ -263,7 +282,7 @@ class PicasaSettingsDialog(object):
                 token = None
             if not token:
                 utils.message_dialog(_('Could not authorize Google '
-                                       'account: %s' % email),
+                                       'account: %s') % email,
                                      gtk.MESSAGE_ERROR)
                 return False
             update_meta(utils.utf8(email), utils.utf8(album),
@@ -282,8 +301,8 @@ def _get_feed_worker(worker, gd_client, tag):
     Get the feed and then start new threads to get each one of the
     images.
     """
-    # TODO: we should have to get the feed if its already been fetched
-    # this session, maybe we need some sort of in memory database of
+    # TODO: we should have to get the feed if it's already been fetched
+    # in this session, maybe we need some sort of in memory database of
     # feeds that have been fetched
     email = meta.get_default(PICASA_EMAIL_KEY).value
     album = meta.get_default(PICASA_ALBUM_KEY).value

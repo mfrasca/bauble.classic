@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
+# Copyright (c) 2012-2015 Mario Frasca <mario@anche.no>
+#
+# This file is part of bauble.classic.
+#
+# bauble.classic is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# bauble.classic is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with bauble.classic. If not, see <http://www.gnu.org/licenses/>.
 
 import os
 import re
@@ -66,7 +85,7 @@ import bauble.utils as utils
 #     needed or deadlocks may occur.
 #     """
 #     conn = db.engine.connect()
-#     # detach connection so when its closed it doesn't go back to the
+#     # detach connection so when it's closed it doesn't go back to the
 #     # pool where there could be the possibility of it being reused and
 #     # having future sql commands run as the user afer this connection
 #     # has been closed
@@ -515,7 +534,6 @@ class UsersEditor(editor.GenericEditorView):
         self.connect('write_button', 'toggled', on_toggled, 'write')
         self.connect('admin_button', 'toggled', on_toggled, 'admin')
 
-
         # only superusers can toggle the admin flag
         stmt = "select rolname from pg_roles where rolsuper is true and rolname = '%s'" % current_user()
         r = db.engine.execute(stmt).fetchone()
@@ -524,11 +542,7 @@ class UsersEditor(editor.GenericEditorView):
         else:
             self.widgets.admin_button.props.sensitive = False
 
-
-        self.connect('pwd_button', 'clicked', self.on_pwd_button_clicked)
-        self.connect('add_button', 'clicked', self.on_add_button_clicked)
-        self.connect('remove_button', 'clicked', self.on_remove_button_clicked)
-
+        self.builder.connect_signals(self)
 
     def get_selected_user(self):
         """
@@ -537,7 +551,6 @@ class UsersEditor(editor.GenericEditorView):
         tree = self.widgets.users_tree
         path, column = tree.get_cursor()
         return tree.get_model()[path][0]
-
 
     new_user_message = _('Enter a user name')
 
@@ -550,15 +563,14 @@ class UsersEditor(editor.GenericEditorView):
         path = model.get_path(treeiter)
         tree.set_cursor(path, column, start_editing=True)
 
-
     def on_remove_button_clicked(self, button, *args):
         """
         """
         user = self.get_selected_user()
-        msg = _('Are you sure you want to remove user <b>%(name)s</b>?\n\n' \
-                    '<i>It is possible that this user could have permissions '\
-                    'on other databases not related to Bauble.</i>') \
-                    % {'name': user}
+        msg = _('Are you sure you want to remove user <b>%(name)s</b>?\n\n'
+                '<i>It is possible that this user could have permissions '
+                'on other databases not related to Bauble.</i>') \
+            % {'name': user}
         if not utils.yes_no_dialog(msg):
             return
 
@@ -617,14 +629,14 @@ class UsersEditor(editor.GenericEditorView):
             pwd2 = self.widgets.pwd_entry2.get_text()
             user = self.get_selected_user()
             if pwd1 == '' or pwd2 == '':
-                msg = _('The password for user <b>%s</b> has not been ' \
-                        'changed.' % user)
+                msg = _('The password for user <b>%s</b> has not been '
+                        'changed.') % user
                 utils.message_dialog(msg, gtk.MESSAGE_WARNING,
                                      parent=self.get_window())
                 return
             elif pwd1 != pwd2:
-                msg = _('The passwords do not match.  The password for '\
-                            'user <b>%s</b> has not been changed.' % user)
+                msg = _('The passwords do not match.  The password for '
+                        'user <b>%s</b> has not been changed.') % user
                 utils.message_dialog(msg, gtk.MESSAGE_WARNING,
                                      parent=self.get_window())
                 return

@@ -28,8 +28,12 @@ import xml
 
 import gtk
 
-from sqlalchemy import Column, Unicode, Integer, ForeignKey, \
-    UnicodeText, func, and_, UniqueConstraint, String
+import logging
+logger = logging.getLogger(__name__)
+
+from sqlalchemy import (
+    Column, Unicode, Integer, ForeignKey, UnicodeText, String,
+    UniqueConstraint, func, and_)
 from sqlalchemy.orm import relation, backref, validates
 from sqlalchemy.orm.session import object_session
 from sqlalchemy.exc import DBAPIError
@@ -68,10 +72,10 @@ def edit_callback(genera):
 def add_species_callback(genera):
     session = db.Session()
     genus = session.merge(genera[0])
-    from bauble.plugins.plants.species_editor import SpeciesEditor
-    e = SpeciesEditor(model=Species(genus=genus))
+    from bauble.plugins.plants.species_editor import edit_species
+    result = edit_species(model=Species(genus=genus)) is not None
     session.close()
-    return e.start() is not None
+    return result
 
 
 def remove_callback(genera):
@@ -82,7 +86,7 @@ def remove_callback(genera):
     from bauble.plugins.plants.species_model import Species
     session = db.Session()
     nsp = session.query(Species).filter_by(genus_id=genus.id).count()
-    safe_str = utils.xml_safe_utf8(str(genus))
+    safe_str = utils.xml_safe(str(genus))
     if nsp > 0:
         msg = (_('The genus <i>%(genus)s</i> has %(num_species)s species.  '
                  'Are you sure you want to remove it?')
@@ -97,7 +101,7 @@ def remove_callback(genera):
         session.delete(obj)
         session.commit()
     except Exception, e:
-        msg = _('Could not delete.\n\n%s') % utils.xml_safe_utf8(e)
+        msg = _('Could not delete.\n\n%s') % utils.xml_safe(e)
         utils.message_details_dialog(msg, traceback.format_exc(),
                                      type=gtk.MESSAGE_ERROR)
     finally:
@@ -164,6 +168,7 @@ class Genus(db.Base, db.Serializable):
     __mapper_args__ = {'order_by': ['genus', 'author']}
 
     rank = 'genus'
+    link_keys = ['accepted']
 
     @property
     def cites(self):
@@ -171,7 +176,7 @@ class Genus(db.Base, db.Serializable):
         '''
 
         cites_notes = [i.note for i in self.notes
-                       if i.category.upper() == 'CITES']
+                       if i.category and i.category.upper() == 'CITES']
         if not cites_notes:
             return self.family.cites
         return cites_notes[0]
@@ -208,6 +213,28 @@ class Genus(db.Base, db.Serializable):
                      primaryjoin='Genus.id==GenusSynonym.synonym_id',
                      cascade='all, delete-orphan', uselist=True)
 
+    @property
+    def accepted(self):
+        'Name that should be used if name of self should be rejected'
+        session = object_session(self)
+        syn = session.query(GenusSynonym).filter(
+            GenusSynonym.synonym_id == self.id).first()
+        accepted = syn and syn.genus
+        return accepted
+
+    @accepted.setter
+    def accepted(self, value):
+        'Name that should be used if name of self should be rejected'
+        assert isinstance(value, self.__class__)
+        if self in value.synonyms:
+            return
+        # remove any previous `accepted` link
+        session = db.Session()
+        session.query(GenusSynonym).filter(
+            GenusSynonym.synonym_id == self.id).delete()
+        session.commit()
+        value.synonyms.append(self)
+
     def __repr__(self):
         return Genus.str(self)
 
@@ -231,7 +258,7 @@ class Genus(db.Base, db.Serializable):
 
         return False
 
-    def as_dict(self):
+    def as_dict(self, recurse=True):
         result = db.Serializable.as_dict(self)
         del result['genus']
         del result['qualifier']
@@ -240,12 +267,24 @@ class Genus(db.Base, db.Serializable):
         result['epithet'] = self.genus
         result['ht-rank'] = 'familia'
         result['ht-epithet'] = self.family.family
+        if recurse and self.accepted is not None:
+            result['accepted'] = self.accepted.as_dict(recurse=False)
         return result
 
     @classmethod
     def retrieve(cls, session, keys):
-        return session.query(cls).filter(
-            cls.genus == keys['epithet']).all()
+        try:
+            return session.query(cls).filter(
+                cls.genus == keys['epithet']).one()
+        except:
+            if 'author' not in keys:
+                return None
+        try:
+            return session.query(cls).filter(
+                cls.genus == keys['epithet'],
+                cls.author == keys['author']).one()
+        except:
+            return None
 
     @classmethod
     def correct_field_names(cls, keys):
@@ -315,7 +354,7 @@ class GenusSynonym(db.Base):
 # late bindings
 from bauble.plugins.plants.family import Family, FamilySynonym
 from bauble.plugins.plants.species_model import Species
-from bauble.plugins.plants.species_editor import SpeciesEditor
+from bauble.plugins.plants.species_editor import edit_species
 
 # only now that we have `Species` can we define the sorted `species` in
 # the `Genus` class.
@@ -428,15 +467,15 @@ class GenusEditorPresenter(editor.GenericEditorPresenter):
             self.set_model_attr('family', value)
             if not value:
                 return
-            syn = self.session.query(FamilySynonym).\
-                filter(FamilySynonym.synonym_id == value.id).first()
+            syn = self.session.query(FamilySynonym).filter(
+                FamilySynonym.synonym_id == value.id).first()
             if not syn:
                 self.set_model_attr('family', value)
                 return
             msg = _('The family <b>%(synonym)s</b> is a synonym of '
                     '<b>%(family)s</b>.\n\nWould you like to choose '
-                    '<b>%(family)s</b> instead?'
-                    % {'synonym': syn.synonym, 'family': syn.family})
+                    '<b>%(family)s</b> instead?') % \
+                {'synonym': syn.synonym, 'family': syn.family}
             box = None
 
             def on_response(button, response):
@@ -459,8 +498,7 @@ class GenusEditorPresenter(editor.GenericEditorPresenter):
                     # duplicate it here
                     self.set_model_attr('family', syn.family)
 
-            box = utils.add_message_box(self.view.widgets.message_box_parent,
-                                        utils.MESSAGE_BOX_YESNO)
+            box = self.view.add_message_box(utils.MESSAGE_BOX_YESNO)
             box.message = msg
             box.on_response = on_response
             box.show()
@@ -481,7 +519,7 @@ class GenusEditorPresenter(editor.GenericEditorPresenter):
         if self.model not in self.session.new:
             self.view.widgets.gen_ok_and_add_button.set_sensitive(True)
 
-        self.__dirty = False
+        self._dirty = False
 
     def cleanup(self):
         super(GenusEditorPresenter, self).cleanup()
@@ -498,11 +536,11 @@ class GenusEditorPresenter(editor.GenericEditorPresenter):
     def set_model_attr(self, field, value, validator=None):
         super(GenusEditorPresenter, self).set_model_attr(field, value,
                                                          validator)
-        self.__dirty = True
+        self._dirty = True
         self.refresh_sensitivity()
 
     def dirty(self):
-        return (self.__dirty or self.synonyms_presenter.dirty() or
+        return (self._dirty or self.synonyms_presenter.dirty() or
                 self.notes_presenter.dirty())
 
     def refresh_view(self):
@@ -511,7 +549,7 @@ class GenusEditorPresenter(editor.GenericEditorPresenter):
                 value = getattr(self.model, 'family')
             else:
                 value = getattr(self.model, field)
-            self.view.set_widget_value(widget, value)
+            self.view.widget_set_value(widget, value)
 
     def start(self):
         r = self.view.start()
@@ -556,13 +594,13 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
                           self.on_add_button_clicked)
         self.view.connect('gen_syn_remove_button', 'clicked',
                           self.on_remove_button_clicked)
-        self.__dirty = False
+        self._dirty = False
 
     def start(self):
         raise Exception('genus.SynonymsPresenter cannot be started')
 
     def dirty(self):
-        return self.__dirty
+        return self._dirty
 
     def init_treeview(self):
         '''
@@ -583,7 +621,7 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
                               % (Genus.str(syn),
                                  utils.xml_safe(unicode(syn.author)),
                                  Family.str(syn.family)))
-            # set background color to indicate its new
+            # set background color to indicate it's new
             if v.id is None:
                 cell.set_property('foreground', 'blue')
             else:
@@ -626,7 +664,7 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
         entry.set_position(-1)
         self.view.widgets.gen_syn_add_button.set_sensitive(False)
         self.view.widgets.gen_syn_add_button.set_sensitive(False)
-        self.__dirty = True
+        self._dirty = True
         self.parent_ref().refresh_sensitivity()
 
     def on_remove_button_clicked(self, button, data=None):
@@ -649,7 +687,7 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
             self.model.synonyms.remove(value.synonym)
             utils.delete_or_expunge(value)
             self.session.flush([value])
-            self.__dirty = True
+            self._dirty = True
             self.refresh_sensitivity()
 
 
@@ -706,13 +744,13 @@ class GenusEditor(editor.GenericModelViewPresenterEditor):
                     self._committed.append(self.model)
             except DBAPIError, e:
                 msg = (_('Error committing changes.\n\n%s') %
-                       utils.xml_safe_utf8(e.orig))
+                       utils.xml_safe(e.orig))
                 utils.message_details_dialog(msg, str(e), gtk.MESSAGE_ERROR)
                 return False
             except Exception, e:
                 msg = (_('Unknown error when committing changes. See the '
                          'details for more information.\n\n%s') %
-                       utils.xml_safe_utf8(e))
+                       utils.xml_safe(e))
                 utils.message_details_dialog(msg, traceback.format_exc(),
                                              gtk.MESSAGE_ERROR)
                 return False
@@ -735,8 +773,7 @@ class GenusEditor(editor.GenericModelViewPresenterEditor):
             more_committed = e.start()
         elif response == self.RESPONSE_OK_AND_ADD:
             sp = Species(genus=self.model)
-            e = SpeciesEditor(model=sp, parent=self.parent)
-            more_committed = e.start()
+            more_committed = edit_species(model=sp, parent=self.parent)
 
         if more_committed is not None:
             if isinstance(more_committed, list):
@@ -802,6 +839,9 @@ class LinksExpander(view.LinksExpander):
         self.tpl_button = web.TPLButton()
         buttons.append(self.tpl_button)
 
+        self.tropicos_button = web.TropicosButton()
+        buttons.append(self.tropicos_button)
+
         for b in buttons:
             b.set_alignment(0, -1)
             self.vbox.pack_start(b)
@@ -815,6 +855,7 @@ class LinksExpander(view.LinksExpander):
         self.grin_button.set_string(row)
         self.bgci_button.set_keywords(genus=row.genus, species='')
         self.tpl_button.set_keywords(genus=row.genus, species='')
+        self.tropicos_button.set_keywords(genus=row.genus, species='')
 
 
 class GeneralGenusExpander(InfoExpander):
@@ -870,17 +911,17 @@ class GeneralGenusExpander(InfoExpander):
         '''
         session = db.Session()
         self.current_obj = row
-        self.set_widget_value('gen_name_data', '<big>%s</big> %s' %
+        self.widget_set_value('gen_name_data', '<big>%s</big> %s' %
                               (row, utils.xml_safe(unicode(row.author))),
                               markup=True)
-        self.set_widget_value('gen_fam_data',
+        self.widget_set_value('gen_fam_data',
                               (utils.xml_safe(unicode(row.family))))
 
         # get the number of species
         nsp = (session.query(Species).
                join('genus').
                filter_by(id=row.id).count())
-        self.set_widget_value('gen_nsp_data', nsp)
+        self.widget_set_value('gen_nsp_data', nsp)
 
         # stop here if no GardenPlugin
         if 'GardenPlugin' not in pluginmgr.plugins:
@@ -894,12 +935,12 @@ class GeneralGenusExpander(InfoExpander):
                 join('species', 'genus').
                 filter_by(id=row.id).count())
         if nacc == 0:
-            self.set_widget_value('gen_nacc_data', nacc)
+            self.widget_set_value('gen_nacc_data', nacc)
         else:
             nsp_in_acc = (session.query(Accession.species_id).
                           join('species', 'genus').
                           filter_by(id=row.id).distinct().count())
-            self.set_widget_value('gen_nacc_data', '%s in %s species'
+            self.widget_set_value('gen_nacc_data', '%s in %s species'
                                   % (nacc, nsp_in_acc))
 
         # get the number of plants in the genus
@@ -907,12 +948,12 @@ class GeneralGenusExpander(InfoExpander):
                    join('accession', 'species', 'genus').
                    filter_by(id=row.id).count())
         if nplants == 0:
-            self.set_widget_value('gen_nplants_data', nplants)
+            self.widget_set_value('gen_nplants_data', nplants)
         else:
             nacc_in_plants = (session.query(Plant.accession_id).
                               join('accession', 'species', 'genus').
                               filter_by(id=row.id).distinct().count())
-            self.set_widget_value('gen_nplants_data', '%s in %s accessions'
+            self.widget_set_value('gen_nplants_data', '%s in %s accessions'
                                   % (nplants, nacc_in_plants))
         session.close()
 
@@ -938,7 +979,25 @@ class SynonymsExpander(InfoExpander):
         syn_box.foreach(syn_box.remove)
         # use True comparison in case the preference isn't set
         self.set_expanded(prefs[self.expanded_pref] is True)
-        if len(row.synonyms) == 0:
+        self.session = object_session(row)
+        logger.debug("genus %s is synonym of %s and has synonyms %s" %
+                     (row, row.accepted, row.synonyms))
+        self.set_label(_("Synonyms"))  # reset default value
+        if row.accepted is not None:
+            self.set_label(_("Accepted name"))
+            on_clicked = lambda l, e, syn: select_in_search_results(syn)
+            # create clickable label that will select the synonym
+            # in the search results
+            box = gtk.EventBox()
+            label = gtk.Label()
+            label.set_alignment(0, .5)
+            label.set_markup(Genus.str(row.accepted, author=True))
+            box.add(label)
+            utils.make_label_clickable(label, on_clicked, row.accepted)
+            syn_box.pack_start(box, expand=False, fill=False)
+            self.show_all()
+            self.set_sensitive(True)
+        elif len(row.synonyms) == 0:
             self.set_sensitive(False)
         else:
             on_clicked = lambda l, e, syn: select_in_search_results(syn)
@@ -984,3 +1043,6 @@ class GenusInfoBox(InfoBox):
         self.synonyms.update(row)
         self.links.update(row)
         self.props.update(row)
+
+
+db.Genus = Genus
