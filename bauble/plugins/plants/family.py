@@ -73,7 +73,7 @@ def remove_callback(families):
     """
     family = families[0]
     from bauble.plugins.plants.genus import Genus
-    session = db.Session()
+    session = object_session(family)
     ngen = session.query(Genus).filter_by(family_id=family.id).count()
     safe_str = utils.xml_safe(str(family))
     if ngen > 0:
@@ -110,18 +110,10 @@ remove_action = view.Action('family_remove', _('_Delete'),
 family_context_menu = [edit_action, add_species_action, remove_action]
 
 
-def family_markup_func(family):
-    """
-    return a string or object with __str__ method to use to markup
-    text in the results view
-    """
-    return family
-
-
 #
 # Family
 #
-class Family(db.Base, db.Serializable):
+class Family(db.Base, db.Serializable, db.WithNotes):
     """
     :Table name: family
 
@@ -210,6 +202,9 @@ class Family(db.Base, db.Serializable):
     def accepted(self):
         'Name that should be used if name of self should be rejected'
         session = object_session(self)
+        if not session:
+            logger.warn('family:accepted - object not in session')
+            return None
         syn = session.query(FamilySynonym).filter(
             FamilySynonym.synonym_id == self.id).first()
         accepted = syn and syn.family
@@ -222,7 +217,10 @@ class Family(db.Base, db.Serializable):
         if self in value.synonyms:
             return
         # remove any previous `accepted` link
-        session = object_session(self) or db.Session()
+        session = object_session(self)
+        if not session:
+            logger.warn('family:accepted.setter - object not in session')
+            return
         session.query(FamilySynonym).filter(
             FamilySynonym.synonym_id == self.id).delete()
         session.commit()
@@ -728,7 +726,7 @@ class GeneralFamilyExpander(InfoExpander):
 
         def on_nacc_clicked(*args):
             f = self.current_obj
-            cmd = 'acc where species.genus.family.family="%s" ' \
+            cmd = 'accession where species.genus.family.family="%s" ' \
                 'and species.genus.family.qualifier="%s"' \
                 % (f.family, f.qualifier)
             bauble.gui.send_command(cmd)
@@ -753,7 +751,7 @@ class GeneralFamilyExpander(InfoExpander):
         self.current_obj = row
         self.widget_set_value('fam_name_data', '<big>%s</big>' % row,
                               markup=True)
-        session = db.Session()
+        session = object_session(row)
         # get the number of genera
         ngen = session.query(Genus).filter_by(family_id=row.id).count()
         self.widget_set_value('fam_ngen_data', ngen)
@@ -802,7 +800,6 @@ class GeneralFamilyExpander(InfoExpander):
                 filter_by(id=row.id).distinct().count()
             self.widget_set_value('fam_nplants_data', '%s in %s accessions'
                                   % (nplants, nacc_in_plants))
-        session.close()
 
 
 class SynonymsExpander(InfoExpander):
@@ -861,49 +858,6 @@ class SynonymsExpander(InfoExpander):
             self.set_sensitive(True)
 
 
-class IPNIFamilyButton(web.IPNIButton):
-
-    _base_uri = "http://www.ipni.org/ipni/advPlantNameSearch.do?"\
-                "find_family=%(family)s" \
-                "&find_isAPNIRecord=on& find_isGCIRecord=on" \
-                "&find_isIKRecord=on&output_format=normal"
-
-
-class LinksExpander(view.LinksExpander):
-
-    def __init__(self):
-        super(LinksExpander, self).__init__('notes')
-
-        buttons = []
-
-        self.google_button = web.GoogleButton()
-        buttons.append(self.google_button)
-
-        self.gbif_button = web.GBIFButton()
-        buttons.append(self.gbif_button)
-
-        self.itis_button = web.ITISButton()
-        buttons.append(self.itis_button)
-
-        self.ipni_button = IPNIFamilyButton()
-        buttons.append(self.ipni_button)
-
-        self.grin_button = web.GRINButton()
-        buttons.append(self.grin_button)
-
-        for b in buttons:
-            b.set_alignment(0, -1)
-            self.vbox.pack_start(b)
-
-    def update(self, row):
-        super(LinksExpander, self).update(row)
-        self.google_button.set_string(row)
-        self.gbif_button.set_string(row)
-        self.itis_button.set_string(row)
-        self.ipni_button.set_keywords(family=row)
-        self.grin_button.set_string(row)
-
-
 class FamilyInfoBox(InfoBox):
     '''
     '''
@@ -911,6 +865,16 @@ class FamilyInfoBox(InfoBox):
     def __init__(self):
         '''
         '''
+
+        button_defs = [
+            {'name': 'IPNIButton', '_base_uri': "http://www.ipni.org/ipni/advPlantNameSearch.do?find_family=%(family)s&find_isAPNIRecord=on& find_isGCIRecord=on&find_isIKRecord=on&output_format=normal", '_space': ' ', 'title': _("Search IPNI"), 'tooltip': _("Search the International Plant Names Index"), },
+            {'name': 'GoogleButton', '_base_uri': "http://www.google.com/search?q=%s", '_space': '+', 'title': "Search Google", 'tooltip': None, },
+            {'name': 'GBIFButton', '_base_uri': "http://www.gbif.org/species/search?q=%s", '_space': '+', 'title': _("Search GBIF"), 'tooltip': _("Search the Global Biodiversity Information Facility"), },
+            {'name': 'ITISButton', '_base_uri': "http://www.itis.gov/servlet/SingleRpt/SingleRpt?search_topic=Scientific_Name&search_value=%s&search_kingdom=Plant&search_span=containing&categories=All&source=html&search_credRating=All", '_space': '%20', 'title': _("Search ITIS"), 'tooltip': _("Search the Intergrated Taxonomic Information System"), },
+            {'name': 'GRINButton', '_base_uri': "http://www.ars-grin.gov/cgi-bin/npgs/swish/accboth?query=%s&submit=Submit+Text+Query&si=0", '_space': '+', 'title': _("Search NPGS/GRIN"), 'tooltip': _('Search National Plant Germplasm System'), },
+            {'name': 'ALAButton', '_base_uri': "http://bie.ala.org.au/search?q=%s", '_space': '+', 'title': _("Search ALA"), 'tooltip': _("Search the Atlas of Living Australia"), },
+
+            ]
         InfoBox.__init__(self)
         filename = os.path.join(paths.lib_dir(), 'plugins', 'plants',
                                 'infoboxes.glade')
@@ -919,7 +883,7 @@ class FamilyInfoBox(InfoBox):
         self.add_expander(self.general)
         self.synonyms = SynonymsExpander(self.widgets)
         self.add_expander(self.synonyms)
-        self.links = LinksExpander()
+        self.links = view.LinksExpander('notes', links=button_defs)
         self.add_expander(self.links)
         self.props = PropertiesExpander()
         self.add_expander(self.props)

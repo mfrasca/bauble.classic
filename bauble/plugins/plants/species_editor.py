@@ -138,9 +138,13 @@ class SpeciesEditorPresenter(editor.GenericEditorPresenter):
             if found:
                 found = dict((k, utils.to_unicode(v))
                              for k, v in found.items())
+                found_s = dict((k, utils.xml_safe(utils.to_unicode(v)))
+                               for k, v in found.items())
             if accepted:
                 accepted = dict((k, utils.to_unicode(v))
-                             for k, v in accepted.items())
+                                for k, v in accepted.items())
+                accepted_s = dict((k, utils.xml_safe(utils.to_unicode(v)))
+                                  for k, v in accepted.items())
 
             msg_box_msg = _('No match found on ThePlantList.org')
 
@@ -156,7 +160,7 @@ class SpeciesEditorPresenter(editor.GenericEditorPresenter):
                 else:
                     cit = ('<i>%(Genus)s</i> %(Species hybrid marker)s'
                            '<i>%(Species)s</i> %(Authorship)s (%(Family)s)'
-                           ) % found
+                           ) % found_s
                     msg = _('%s is the closest match for your data.\n'
                             'Do you want to accept it?' % cit)
                     b1 = box = self.view.add_message_box(
@@ -182,7 +186,7 @@ class SpeciesEditorPresenter(editor.GenericEditorPresenter):
                 if self.model.accepted is None and accepted:
                     cit = ('<i>%(Genus)s</i> %(Species hybrid marker)s'
                            '<i>%(Species)s</i> %(Authorship)s (%(Family)s)'
-                           ) % accepted
+                           ) % accepted_s
                     msg = _('%s is the accepted taxon for your data.\n'
                             'Do you want to add it?' % cit)
                     b2 = box = self.view.add_message_box(
@@ -198,6 +202,7 @@ class SpeciesEditorPresenter(editor.GenericEditorPresenter):
                                     'object': 'taxon',
                                     'rank': 'species',
                                     'ht-rank': 'genus',
+                                    'familia': accepted['Family'],
                                     'ht-epithet': accepted['Genus'],
                                     'epithet': accepted['Species'],
                                     'sp_author': accepted['Authorship'],
@@ -424,7 +429,7 @@ class SpeciesEditorPresenter(editor.GenericEditorPresenter):
         if len(self.problems) > 0 or self.model.genus is None:
             self.view.set_label('sp_fullname_label', '--')
             return
-        sp_str = Species.str(self.model, markup=True, authors=True)
+        sp_str = self.model.str(markup=True, authors=True)
         self.view.set_label('sp_fullname_label', sp_str)
         if self.model.genus is not None:
             genus = self.model.genus
@@ -445,7 +450,7 @@ class SpeciesEditorPresenter(editor.GenericEditorPresenter):
                 msg = _("This binomial name is already in your collection"
                         ", as %s.\n\n"
                         "Are you sure you want to insert it again?") % \
-                    Species.str(omonym, authors=True, markup=True)
+                    omonym.str(authors=True, markup=True)
 
                 def on_response(button, response):
                     self.view.remove_box(self.omonym_box)
@@ -1010,7 +1015,7 @@ class SynonymsPresenter(editor.GenericEditorPresenter):
         path, col = tree.get_cursor()
         tree_model = tree.get_model()
         value = tree_model[tree_model.get_iter(path)][0]
-        s = Species.str(value.synonym, markup=True)
+        s = value.synonym.str(markup=True)
         msg = 'Are you sure you want to remove %s as a synonym to the ' \
               'current species?\n\n<i>Note: This will not remove the species '\
               '%s from the database.</i>' % (s, s)

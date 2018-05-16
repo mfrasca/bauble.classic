@@ -330,7 +330,7 @@ class InfoBox(gtk.Notebook):
 
 class LinksExpander(InfoExpander):
 
-    def __init__(self, notes=None):
+    def __init__(self, notes=None, links=[]):
         """
         :param notes: the name of the notes property on the row
         """
@@ -338,10 +338,25 @@ class LinksExpander(InfoExpander):
         self.dynamic_box = gtk.VBox()
         self.vbox.pack_start(self.dynamic_box)
         self.notes = notes
+        self.buttons = []
+        from bauble.utils.web import BaubleLinkButton
+        for link in links:
+            try:
+                klass = type(link['name'], (BaubleLinkButton, ),
+                             link)
+                self.buttons.append(klass())
+            except Exception, e:
+                logger.debug('wrong link definition %s, %s(%s)' %
+                             (link, type(e), e))
+        for b in self.buttons:
+            b.set_alignment(0, -1)
+            self.vbox.pack_start(b)
 
     def update(self, row):
         import pango
         map(self.dynamic_box.remove, self.dynamic_box.get_children())
+        for b in self.buttons:
+            b.set_string(row)
         if self.notes:
             notes = getattr(row, self.notes)
             for note in notes:
@@ -396,9 +411,6 @@ class CountResultsTask(threading.Thread):
         self.__cancel = True
 
     def run(self):
-        session = db.Session()
-        ## we really need a new session
-        session.close()
         session = db.Session()
         klass = self.klass
         d = {}
@@ -678,6 +690,10 @@ class SearchView(pluginmgr.View):
             set_infobox_from_row(None)
             return
 
+        if object_session(values[0]) is None:
+            logger.debug('cannot populate info box from detached object')
+            return
+
         try:
             set_infobox_from_row(values[0])
         except Exception, e:
@@ -760,12 +776,15 @@ class SearchView(pluginmgr.View):
         logger.debug('SearchView.search(%s)' % text)
         error_msg = None
         error_details_msg = None
-        self.session.close()
-        # create a new session for each search...maybe we shouldn't
-        # even have session as a class attribute
-        self.session = db.Session()
         # stop whatever it might still be doing
         self.cancel_threads()
+        if False:
+            # create a new session for each search...
+            self.session.close()
+            self.session = db.Session()
+        else:
+            # reuse session, but undo all that has not been committed
+            self.session.rollback()
         bold = '<b>%s</b>'
         results = []
         try:
@@ -982,18 +1001,13 @@ class SearchView(pluginmgr.View):
                     # expire the object in the session with the same key
                     self.session.expire(value)
                 else:
-                    self.session.add(value)
+                    self.session.merge(value)
             try:
-                func = self.row_meta[type(value)].markup_func
-                if func is not None:
-                    r = func(value)
-                    if isinstance(r, (list, tuple)):
-                        main, substr = r
-                    else:
-                        main = r
-                        substr = '(%s)' % type(value).__name__
+                r = value.search_view_markup_pair()
+                if isinstance(r, (list, tuple)):
+                    main, substr = r
                 else:
-                    main = utils.xml_safe(str(value))
+                    main = r
                     substr = '(%s)' % type(value).__name__
                 cell.set_property(
                     'markup', '%s\n%s' %
@@ -1256,6 +1270,11 @@ class AppendThousandRows(threading.Thread):
         for row in rows:
             self.view.add_row(row)
 
+    def cancel_callback(self):
+        row = ['---'] * 6
+        row[4] = '** ' + _('interrupted') + ' **'
+        self.view.liststore.append(row)
+
     def __init__(self, view, group=None, verbose=None, **kwargs):
         super(AppendThousandRows, self).__init__(
             group=group, target=None, name=None, verbose=verbose)
@@ -1277,11 +1296,20 @@ class AppendThousandRows(threading.Thread):
             gobject.idle_add(self.callback, rows)
             offset += step
         session.close()
+        if offset < count:
+            gobject.idle_add(self.cancel_callback)
 
 
 class HistoryView(pluginmgr.View):
     """Show the tables row in the order they were last updated
     """
+
+    TVC_TIMESTAMP = 0
+    TVC_OPERATION = 1
+    TVC_USER = 2
+    TVC_TABLE = 3
+    TVC_USER_FRIENDLY = 4
+    TVC_DICT = 5
 
     def __init__(self):
         logger.debug('PrefsView::__init__')
@@ -1330,6 +1358,32 @@ class HistoryView(pluginmgr.View):
             item.table_name, friendly, item.values
             ])
 
+    def on_row_activated(self, tree, path, column):
+        row = self.liststore[path]
+        dic = eval(row[self.TVC_DICT])
+        table = row[self.TVC_TABLE]
+        obj_id = int(dic['id'])
+        for table_name, equivalent, key in [
+                ('genus_note', 'genus', 'genus_id'),
+                ('species_note', 'species', 'species_id'),
+                ('location_note', 'location', 'location_id'),
+                ('accession_note', 'accession', 'accession_id'),
+                ('plant_note', 'plant', 'plant_id'),
+                ('genus_synonym', 'genus', 'genus_id'),
+                ('species_synonym', 'species', 'species_id'),
+                ('vernacular_name', 'species', 'species_id'),
+                ('default_vernacular_name', 'species', 'species_id'),
+                ('plant_change', 'plant', 'plant_id'),
+                ]:
+            if table == table_name:
+                table = equivalent
+                obj_id = int(dic[key])
+        mapper_search = search.get_strategy('MapperSearch')
+        if table in mapper_search._domains:
+            query = '%s where id=%s' % (table, obj_id)
+            bauble.gui.widgets.main_comboentry.child.set_text(query)
+            bauble.gui.widgets.go_button.emit("clicked")
+
     def update(self):
         """
         Add the history items to the view.
@@ -1372,6 +1426,8 @@ def select_in_search_results(obj):
     view = bauble.gui.get_view()
     if not isinstance(view, SearchView):
         return None
+    logger.debug("select_in_search_results %s is in session %s" %
+                 (obj, obj in view.session))
     model = view.results_view.get_model()
     found = utils.search_tree_model(model, obj)
     row_iter = None

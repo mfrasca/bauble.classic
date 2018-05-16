@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2008-2010 Brett Adams
-# Copyright 2015 Mario Frasca <mario@anche.no>.
+# Copyright 2015-2016 Mario Frasca <mario@anche.no>.
 #
 # This file is part of bauble.classic.
 #
@@ -120,20 +120,6 @@ remove_action = Action('plant_remove', _('_Delete'), callback=remove_callback,
 
 plant_context_menu = [
     edit_action, branch_action, remove_action, ]
-
-
-def plant_markup_func(plant):
-    '''
-    '''
-    sp_str = plant.accession.species_str(markup=True)
-    #dead_color = "#777"
-    dead_color = "#9900ff"
-    if plant.quantity <= 0:
-        dead_markup = '<span foreground="%s">%s</span>' % \
-            (dead_color, utils.xml_safe(plant))
-        return dead_markup, sp_str
-    else:
-        return utils.xml_safe(plant), sp_str
 
 
 def get_next_code(acc):
@@ -417,7 +403,7 @@ acc_type_values = {u'Plant': _('Plant'),
                    None: ''}
 
 
-class Plant(db.Base, db.Serializable, db.DefiningPictures):
+class Plant(db.Base, db.Serializable, db.DefiningPictures, db.WithNotes):
     """
     :Table name: plant
 
@@ -487,6 +473,21 @@ class Plant(db.Base, db.Serializable, db.DefiningPictures):
 
     _delimiter = None
 
+    def search_view_markup_pair(self):
+        '''provide the two lines describing object for SearchView row.
+        '''
+        sp_str = self.accession.species_str(markup=True)
+        dead_color = "#9900ff"
+        if self.quantity <= 0:
+            dead_markup = '<span foreground="%s">%s</span>' % \
+                (dead_color, utils.xml_safe(self))
+            return dead_markup, sp_str
+        else:
+            located_counted = ('%s <span foreground="#555555" size="small" '
+                               'weight="light">- %s alive in %s</span>') % (
+                utils.xml_safe(self), self.quantity, self.location)
+            return located_counted, sp_str
+
     @classmethod
     def get_delimiter(cls, refresh=False):
         """
@@ -553,10 +554,6 @@ class Plant(db.Base, db.Serializable, db.DefiningPictures):
         return plant
 
     def markup(self):
-        #return "%s.%s" % (self.accession, self.plant_id)
-        # FIXME: this makes expanding accessions look ugly with too many
-        # plant names around but makes expanding the location essential
-        # or you don't know what plants you are looking at
         return "%s%s%s (%s)" % (self.accession, self.delimiter, self.code,
                                 self.accession.species_str(markup=True))
 
@@ -768,13 +765,13 @@ class PlantEditorPresenter(GenericEditorPresenter):
             # new accession, fixes bug #103946
             self.view.widgets.acc_species_label.set_markup('')
             if value is not None:
-                sp_str = Species.str(self.model.accession.species, markup=True)
+                sp_str = self.model.accession.species.str(markup=True)
                 self.view.widgets.acc_species_label.set_markup(sp_str)
                 self.view.widgets.plant_code_entry.emit('changed')
         self.assign_completions_handler('plant_acc_entry', acc_get_completions,
                                         on_select=on_select)
         if self.model.accession:
-            sp_str = Species.str(self.model.accession.species, markup=True)
+            sp_str = self.model.accession.species.str(markup=True)
         else:
             sp_str = ''
         self.view.widgets.acc_species_label.set_markup(sp_str)

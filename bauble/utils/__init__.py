@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright (c) 2005,2006,2007,2008,2009 Brett Adams <brett@belizebotanic.org>
-# Copyright (c) 2015 Mario Frasca <mario@anche.no>
+# Copyright (c) 2015-2016 Mario Frasca <mario@anche.no>
 #
 # This file is part of bauble.classic.
 #
@@ -32,15 +32,141 @@ import xml.sax.saxutils as saxutils
 
 import gtk
 import gobject
-
-from bauble.i18n import _
-import bauble
-from bauble.error import check
-import bauble.paths as paths
+import glib
 
 import logging
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
+
+import threading
+
+from bauble.i18n import _
+import bauble
+from bauble.error import check
+from bauble import paths
+
+
+def read_in_chunks(file_object, chunk_size=1024):
+    """read a chunk from a stream
+
+    Lazy function (generator) to read piece by piece from a file-like object.
+    Default chunk size: 1k."""
+    while True:
+        data = file_object.read(chunk_size)
+        if not data:
+            break
+        yield data
+
+
+class Cache:
+    '''a simple class for caching images
+
+    you instantiate a size 10 cache like this:
+    >>> cache = ImageCache(10)
+
+    if `getter` is a function that returns a picture, you don't immediately
+    invoke it, you use the cache like this:
+    >>> image = cache.get(name, getter)
+
+    internally, the cache is stored in a dictionary, the key is the name of
+    the image, the value is a pair with first the timestamp of the last usage
+    of that key and second the value.
+    '''
+
+    def __init__(self, size):
+        self.size = size
+        self.storage = {}
+
+    def get(self, key, getter, on_hit=lambda x: None):
+        if key in self.storage:
+            value = self.storage[key][1]
+            on_hit(value)
+        else:
+            if len(self.storage) == self.size:
+                # remove the oldest entry
+                k = min(zip(self.storage.values(), self.storage.keys()))[1]
+                del self.storage[k]
+            value = getter()
+        import time
+        self.storage[key] = time.time(), value
+        return value
+
+
+class ImageLoader(threading.Thread):
+    cache = Cache(12)  # class-global cached results
+
+    def __init__(self, box, url, *args, **kwargs):
+        super(ImageLoader, self).__init__(*args, **kwargs)
+        self.box = box  # will hold image or label
+        self.loader = gtk.gdk.PixbufLoader()
+        if (url.startswith('http://') or url.startswith('https://')):
+            self.reader_function = self.read_global_url
+            self.url = url
+        else:
+            self.reader_function = self.read_local_url
+            from bauble import prefs
+            pfolder = prefs.prefs[prefs.picture_root_pref]
+            self.url = os.path.join(pfolder, url)
+
+    def callback(self):
+        pixbuf = self.loader.get_pixbuf()
+        try:
+            pixbuf = pixbuf.apply_embedded_orientation()
+            scale_x = pixbuf.get_width() / 400
+            scale_y = pixbuf.get_height() / 400
+            scale = max(scale_x, scale_y, 1)
+            x = int(pixbuf.get_width() / scale)
+            y = int(pixbuf.get_height() / scale)
+            scaled_buf = pixbuf.scale_simple(x, y, gtk.gdk.INTERP_BILINEAR)
+            if self.box.get_children():
+                image = self.box.get_children()[0]
+            else:
+                image = gtk.Image()
+                self.box.add(image)
+            image.set_from_pixbuf(scaled_buf)
+        except glib.GError, e:
+            logger.debug("picture %s caused glib.GError %s" %
+                         (self.url, e))
+            text = _('picture file %s not found.') % self.url
+            label = gtk.Label()
+            label.set_text(text)
+            self.box.add(label)
+        except Exception, e:
+            logger.warning("picture %s caused Exception %s:%s" %
+                           (self.url, type(e), e))
+            label = gtk.Label()
+            label.set_text(str(e))
+            self.box.add(label)
+        self.box.show_all()
+
+    def loader_notified(self, pixbufloader):
+        gobject.idle_add(self.callback)
+
+    def run(self):
+        self.loader.connect("closed", self.loader_notified)
+        self.cache.get(
+            self.url, self.reader_function, on_hit=self.loader.write)
+        self.loader.close()
+
+    def read_global_url(self):
+        self.loader.connect("area-prepared", self.loader_notified)
+        import urllib
+        import contextlib
+        pieces = []
+        with contextlib.closing(urllib.urlopen(self.url)) as f:
+            for piece in read_in_chunks(f, 4096):
+                self.loader.write(piece)
+                pieces.append(piece)
+        return ''.join(pieces)
+
+    def read_local_url(self):
+        self.loader.connect("area-prepared", self.loader_notified)
+        pieces = []
+        with open(self.url) as f:
+            for piece in read_in_chunks(f, 4096):
+                self.loader.write(piece)
+                pieces.append(piece)
+        return ''.join(pieces)
 
 
 def find_dependent_tables(table, metadata=None):
@@ -861,10 +987,12 @@ def make_label_clickable(label, on_clicked, *args):
           'label must have an gtk.EventBox as its parent')
     label.__pressed = False
 
-    def on_enter_notify(*args):
+    def on_enter_notify(widget, *args):
+        widget.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#faf8f7"))
         label.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse("blue"))
 
-    def on_leave_notify(*args):
+    def on_leave_notify(widget, *args):
+        widget.modify_bg(gtk.STATE_NORMAL, None)
         label.modify_fg(gtk.STATE_NORMAL, None)
         label.__pressed = False
 
@@ -876,10 +1004,19 @@ def make_label_clickable(label, on_clicked, *args):
             label.__pressed = False
             label.modify_fg(gtk.STATE_NORMAL, None)
             on_clicked(label, event, *args)
-    eventbox.connect('enter_notify_event', on_enter_notify)
-    eventbox.connect('leave_notify_event', on_leave_notify)
-    eventbox.connect('button_press_event', on_press)
-    eventbox.connect('button_release_event', on_release, *args)
+
+    try:
+        eventbox.disconnect(label.__on_event)
+        logger.debug('disconnected previous release-event handler')
+        label.__on_event = eventbox.connect(
+            'button_release_event', on_release, *args)
+    except AttributeError:
+        logger.debug('defining handlers')
+        label.__on_event = eventbox.connect(
+            'button_release_event', on_release, *args)
+        eventbox.connect('enter_notify_event', on_enter_notify)
+        eventbox.connect('leave_notify_event', on_leave_notify)
+        eventbox.connect('button_press_event', on_press)
 
 
 def enum_values_str(col):

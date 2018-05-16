@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2008-2010 Brett Adams
-# Copyright 2015 Mario Frasca <mario@anche.no>.
+# Copyright 2015-2016 Mario Frasca <mario@anche.no>.
 #
 # This file is part of bauble.classic.
 #
@@ -235,13 +235,6 @@ remove_action = Action('acc_remove', _('_Delete'), callback=remove_callback,
                        accelerator='<ctrl>Delete')
 
 acc_context_menu = [edit_action, add_plant_action, remove_action]
-
-
-def acc_markup_func(acc):
-    """
-    Returns str(acc), acc.species_str()
-    """
-    return utils.xml_safe(unicode(acc)), acc.species_str(markup=True)
 
 
 # TODO: accession should have a one-to-many relationship on verifications
@@ -521,7 +514,7 @@ class AccessionNote(db.Base, db.Serializable):
         return result
 
 
-class Accession(db.Base, db.Serializable):
+class Accession(db.Base, db.Serializable, db.WithNotes):
     """
     :Table name: accession
 
@@ -616,14 +609,15 @@ class Accession(db.Base, db.Serializable):
                                    translations=recvd_type_values),
                         default=None)
 
-    # "id_qual" new in 0.7
+    # ITF2 - C24 - Rank Qualified Flag - Transfer code: rkql
+    ## B: Below Family; F: Family; G: Genus; S: Species; I: first
+    ## Infraspecific Epithet; J: second Infraspecific Epithet; C: Cultivar;
+    id_qual_rank = Column(Unicode(10))
+
+    # ITF2 - C25 - Identification Qualifier - Transfer code: idql
     id_qual = Column(types.Enum(values=['aff.', 'cf.', 'incorrect',
                                         'forsan', 'near', '?', None]),
                      default=None)
-
-    # new in 0.9, this column should contain the name of the column in
-    # the species table that the id_qual refers to, e.g. genus, sp, etc.
-    id_qual_rank = Column(Unicode(10))
 
     # "private" new in 0.8b2
     private = Column(Boolean, default=False)
@@ -655,6 +649,19 @@ class Accession(db.Base, db.Serializable):
         'Location', primaryjoin='Accession.intended_location_id==Location.id')
     intended2_location = relation(
         'Location', primaryjoin='Accession.intended2_location_id==Location.id')
+
+    def search_view_markup_pair(self):
+        """provide the two lines describing object for SearchView row.
+
+        """
+        first, second = (utils.xml_safe(unicode(self)),
+                         self.species_str(markup=True))
+        suffix = _("%(1)s plant groups in %(2)s location(s)") % {
+            '1': len(set(self.plants)),
+            '2': len(set(p.location for p in self.plants))}
+        suffix = ('<span foreground="#555555" size="small" '
+                  'weight="light"> - %s</span>') % suffix
+        return first + suffix, second
 
     @property
     def pictures(self):
@@ -718,28 +725,13 @@ class Accession(db.Base, db.Serializable):
             logger.warning(msg)
             self.__warned_about_id_qual = True
 
-        # copy the species so we don't affect the original
-        session = db.Session()
-        species = session.merge(self.species)  # , dont_load=True)
-
-        # generate the string
-        if self.id_qual in ('aff.', 'cf.'):
-            if self.id_qual_rank == 'infrasp':
-                species.sp = '%s %s' % (species.sp, self.id_qual)
-            elif self.id_qual_rank:
-                setattr(species, self.id_qual_rank,
-                        '%s %s' % (self.id_qual,
-                                   getattr(species, self.id_qual_rank)))
-            sp_str = Species.str(species, authors, markup)
-        elif self.id_qual:
-            sp_str = '%s(%s)' % (Species.str(species, authors, markup),
-                                 self.id_qual)
+        if self.id_qual:
+            sp_str = self.species.str(
+                authors, markup, remove_zws=True,
+                qualification=(self.id_qual_rank, self.id_qual))
         else:
-            sp_str = Species.str(species, authors, markup)
+            sp_str = self.species.str(authors, markup, remove_zws=True)
 
-        # clean up and return the string
-        del species
-        session.close()
         self.__cached_species_str[(markup, authors)] = sp_str
         return sp_str
 
@@ -748,7 +740,7 @@ class Accession(db.Base, db.Serializable):
 
     def as_dict(self):
         result = db.Serializable.as_dict(self)
-        result['species'] = self.species.str(self.species, remove_zws=True)
+        result['species'] = self.species.str(remove_zws=True, authors=False)
         return result
 
     @classmethod
@@ -762,6 +754,10 @@ class Accession(db.Base, db.Serializable):
     def compute_serializable_fields(cls, session, keys):
         logger.debug('compute_serializable_fields(session, %s)' % keys)
         result = {'species': None}
+        keys = dict(keys)  # make copy
+        if 'species' in keys:
+            keys['taxon'] = keys['species']
+            keys['rank'] = 'species'
         if 'rank' in keys and 'taxon' in keys:
             ## now we must connect the accession to the species it refers to
             if keys['rank'] == 'species':
@@ -857,7 +853,9 @@ class AccessionEditorView(editor.GenericEditorView):
         'acc_ok_and_add_button': _('Save your changes changes and add a '
                                    'plant to this accession.'),
         'acc_next_button': _('Save your changes changes and add another '
-                             'accession.')
+                             'accession.'),
+
+        'sources_code_entry': "ITF2 - E7 - Donor's Accession Identifier - donacc",
         }
 
     def __init__(self, parent=None):
@@ -962,7 +960,7 @@ class AccessionEditorView(editor.GenericEditorView):
         """
         v = model[treeiter][0]
         renderer.set_property(
-            'text', '%s (%s)' % (Species.str(v, authors=True), v.genus.family))
+            'text', '%s (%s)' % (v.str(authors=True), v.genus.family))
 
 
 class VoucherPresenter(editor.GenericEditorPresenter):
@@ -1022,7 +1020,7 @@ class VoucherPresenter(editor.GenericEditorPresenter):
                 model.append([voucher])
         treeview.set_model(model)
 
-    def dirty(self):
+    def is_dirty(self):
         return self._dirty
 
     def on_cell_edited(self, cell, path, new_text, data):
@@ -1101,7 +1099,7 @@ class VerificationPresenter(editor.GenericEditorPresenter):
             set_expanded(True)
         self._dirty = False
 
-    def dirty(self):
+    def is_dirty(self):
         return self._dirty
 
     def refresh_view(self):
@@ -1189,7 +1187,7 @@ class VerificationPresenter(editor.GenericEditorPresenter):
             def sp_cell_data_func(col, cell, model, treeiter, data=None):
                 v = model[treeiter][0]
                 cell.set_property('text', '%s (%s)' %
-                                  (Species.str(v, authors=True),
+                                  (v.str(authors=True),
                                    v.genus.family))
 
             ver_prev_taxon_entry = self.widgets.ver_prev_taxon_entry
@@ -1491,10 +1489,10 @@ class SourcePresenter(editor.GenericEditorPresenter):
                 active = self.garden_prop_str
         self.populate_source_combo(active)
 
-    def dirty(self):
-        return self._dirty or self.source_prop_presenter.dirty() or \
-            self.prop_chooser_presenter.dirty() or \
-            self.collection_presenter.dirty()
+    def is_dirty(self):
+        return self._dirty or self.source_prop_presenter.is_dirty() or \
+            self.prop_chooser_presenter.is_dirty() or \
+            self.collection_presenter.is_dirty()
 
     def refresh_sensitivity(self):
         logger.warning('refresh_sensitivity: %s' % str(self.problems))
@@ -1952,10 +1950,10 @@ class AccessionEditorPresenter(editor.GenericEditorPresenter):
             self.view.widget_set_value(target_widget, location)
             self.set_model_attr(target_field, location)
 
-    def dirty(self):
+    def is_dirty(self):
         presenters = [self.ver_presenter, self.voucher_presenter,
                       self.notes_presenter, self.source_presenter]
-        dirty_kids = [p.dirty() for p in presenters]
+        dirty_kids = [p.is_dirty() for p in presenters]
         return self._dirty or True in dirty_kids
 
     def on_recvd_type_comboentry_changed(self, combo, *args):
@@ -2118,7 +2116,7 @@ class AccessionEditorPresenter(editor.GenericEditorPresenter):
         else:
             self.view.widgets.acc_id_qual_rank_combo.set_sensitive(False)
 
-        sensitive = self.dirty() and self.validate() \
+        sensitive = self.is_dirty() and self.validate() \
             and not self.problems \
             and not self.source_presenter.all_problems() \
             and not self.ver_presenter.problems \
@@ -2221,7 +2219,7 @@ class AccessionEditor(editor.GenericModelViewPresenterEditor):
                     #
                     # msg = _('Some required fields have not been completed')
                     return False
-                if self.presenter.dirty():
+                if self.presenter.is_dirty():
                     self.commit_changes()
                     self._committed.append(self.model)
             except DBAPIError, e:
@@ -2236,8 +2234,8 @@ class AccessionEditor(editor.GenericModelViewPresenterEditor):
                 utils.message_details_dialog(msg, traceback.format_exc(),
                                              gtk.MESSAGE_ERROR)
                 return False
-        elif self.presenter.dirty() and utils.yes_no_dialog(not_ok_msg) \
-                or not self.presenter.dirty():
+        elif self.presenter.is_dirty() and utils.yes_no_dialog(not_ok_msg) \
+                or not self.presenter.is_dirty():
             self.session.rollback()
             return True
         else:
@@ -2413,8 +2411,6 @@ class GeneralAccessionExpander(InfoExpander):
         else:
             self.widgets.remove_parent(acc_private)
 
-        #self.widget_set_value('name_data', '%s %s' % \
-        #                      (row.species.markup(True), row.id_qual or '',))
         self.widget_set_value('name_data', row.species_str(markup=True),
                               markup=True)
 
@@ -2533,6 +2529,12 @@ class SourceExpander(InfoExpander):
             self.widgets.source_name_data.props.visible = True
             self.widget_set_value('source_name_data',
                                   utils.utf8(row.source.source_detail))
+
+            def on_source_clicked(w, e, x):
+                select_in_search_results(x)
+            utils.make_label_clickable(self.widgets.source_name_data,
+                                       on_source_clicked,
+                                       row.source.source_detail)
         else:
             self.widgets.source_name_label.props.visible = False
             self.widgets.source_name_data.props.visible = False

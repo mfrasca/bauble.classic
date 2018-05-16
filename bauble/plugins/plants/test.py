@@ -158,6 +158,13 @@ species_test_data = (
 species_note_test_data = (
     {'id': 1, 'species_id': 18, 'category': u'CITES', 'note': u'I'},
     {'id': 2, 'species_id': 20, 'category': u'IUCN', 'note': u'LC'},
+    {'id': 3, 'species_id': 18, 'category': u'<price>', 'note': u'19.50'},
+    {'id': 4, 'species_id': 18, 'category': u'[list_var]', 'note': u'abc'},
+    {'id': 5, 'species_id': 18, 'category': u'[list_var]', 'note': u'def'},
+    {'id': 6, 'species_id': 18, 'category': u'<price_tag>', 'note': u'$19.50'},
+    {'id': 7, 'species_id': 18, 'category': u'{dict_var:k}', 'note': u'abc'},
+    {'id': 8, 'species_id': 18, 'category': u'{dict_var:l}', 'note': u'def'},
+    {'id': 9, 'species_id': 18, 'category': u'{dict_var:m}', 'note': u'xyz'},
     )
 
 species_str_map = {
@@ -170,8 +177,8 @@ species_str_map = {
     7: 'Abrus precatorius SomethingRidiculous Group',
     8: "Abrus precatorius (SomethingRidiculous Group) 'Hot Rio Nights'",
     9: "Maxillaria %s generalis 'Red'" % Species.hybrid_char,
-    10: "Maxillaria %s generalis (SomeGroup Group) 'Red'"
-    % Species.hybrid_char,
+    10: ("Maxillaria %s generalis (SomeGroup Group) 'Red'"
+         % Species.hybrid_char),
     11: "Maxillaria generalis agg.",
     12: "Maxillaria SomeGroup Group",
     13: "Maxillaria 'Red'",
@@ -189,8 +196,8 @@ species_markup_map = {
     6: '<i>Encyclia</i> <i>cochleata</i> \'Black Night\'',
     12: "<i>Maxillaria</i> SomeGroup Group",
     14: "<i>Maxillaria</i> 'Red &amp; Blue'",
-    15: "<i>Encyclia</i> <i>cochleata</i> subsp. <i>"
-    "cochleata</i> var. <i>cochleata</i> 'Black'",
+    15: ("<i>Encyclia</i> <i>cochleata</i> subsp. <i>"
+         "cochleata</i> var. <i>cochleata</i> 'Black'"),
     }
 
 species_str_authors_map = {
@@ -202,8 +209,8 @@ species_str_authors_map = {
     6: u'Encyclia cochleata (L.) Lem\xe9e \'Black Night\'',
     7: 'Abrus precatorius L. SomethingRidiculous Group',
     8: "Abrus precatorius L. (SomethingRidiculous Group) 'Hot Rio Nights'",
-    15: "Encyclia cochleata L. subsp. "
-    "cochleata L. var. cochleata L. 'Black' L.",
+    15: ("Encyclia cochleata L. subsp. "
+         "cochleata L. var. cochleata L. 'Black' L."),
 }
 
 species_markup_authors_map = {
@@ -384,7 +391,7 @@ class FamilyTests(PlantTestCase):
         self.assert_(str(f) == repr(f))
         f = Family(family=u'fam')
         self.assert_(str(f) == 'fam')
-        f.qualifier = 's. lat.'
+        f.qualifier = u's. lat.'
         self.assert_(str(f) == 'fam s. lat.')
 
     def test_editor(self):
@@ -755,7 +762,7 @@ class SpeciesTests(PlantTestCase):
         Test the Species.str() method
         """
         def get_sp_str(id, **kwargs):
-            return Species.str(self.session.query(Species).get(id), **kwargs)
+            return self.session.query(Species).get(id).str(**kwargs)
 
         for sid, expect in species_str_map.iteritems():
                 sp = self.session.query(Species).get(sid)
@@ -778,7 +785,7 @@ class SpeciesTests(PlantTestCase):
 
     def test_lexicographic_order__unspecified_precedes_specified(self):
         def get_sp_str(id, **kwargs):
-            return Species.str(self.session.query(Species).get(id), **kwargs)
+            return self.session.query(Species).get(id).str(**kwargs)
 
         self.assertTrue(get_sp_str(1) > get_sp_str(22))
         self.assertTrue(get_sp_str(1) > get_sp_str(23))
@@ -1188,9 +1195,9 @@ class FromAndToDict_create_update_test(PlantTestCase):
             self.session, {'object': 'taxon',
                            'rank': 'familia',
                            'epithet': 'Leguminosae',
-                           'qualifier': 's. lat.'},
+                           'qualifier': u's. lat.'},
             create=False, update=False)
-        self.assertEquals(obj.qualifier, 's. str.')
+        self.assertEquals(obj.qualifier, u's. str.')
 
     def test_family_nocreate_updatediff_existing(self):
         ## update object in self.session
@@ -1198,9 +1205,9 @@ class FromAndToDict_create_update_test(PlantTestCase):
             self.session, {'object': 'taxon',
                            'rank': 'familia',
                            'epithet': 'Leguminosae',
-                           'qualifier': 's. lat.'},
+                           'qualifier': u's. lat.'},
             create=False, update=True)
-        self.assertEquals(obj.qualifier, 's. lat.')
+        self.assertEquals(obj.qualifier, u's. lat.')
 
     def test_genus_nocreate_noupdate_noexisting_impossible(self):
         # do not create if not existing
@@ -1246,8 +1253,8 @@ class FromAndToDict_create_update_test(PlantTestCase):
         obj = Genus.retrieve_or_create(
             self.session, {'object': 'taxon',
                            'rank': 'genus',
-                           'epithet': 'Maxillaria',
-                           'author': 'Schltr.'},
+                           'epithet': u'Maxillaria',
+                           'author': u'Schltr.'},
             create=False, update=False)
         self.assertTrue(obj is not None)
         self.assertEquals(obj.author, '')
@@ -1257,11 +1264,11 @@ class FromAndToDict_create_update_test(PlantTestCase):
         obj = Genus.retrieve_or_create(
             self.session, {'object': 'taxon',
                            'rank': 'genus',
-                           'epithet': 'Maxillaria',
-                           'author': 'Schltr.'},
+                           'epithet': u'Maxillaria',
+                           'author': u'Schltr.'},
             create=False, update=True)
         self.assertTrue(obj is not None)
-        self.assertEquals(obj.author, 'Schltr.')
+        self.assertEquals(obj.author, u'Schltr.')
 
     def test_vernacular_name_as_dict(self):
         bra = self.session.query(Species).filter(Species.id == 21).first()
@@ -1633,6 +1640,48 @@ class SpeciesProperties_test(PlantTestCase):
         self.assertEquals(obj.note, u'EX')
 
 
+class AttributesStoredInNotes(PlantTestCase):
+    def test_atomic_value_interpreted(self):
+        obj = Species.retrieve_or_create(
+            self.session, {'object': 'taxon',
+                           'ht-rank': 'genus',
+                           'rank': 'species',
+                           'ht-epithet': u'Laelia',
+                           'epithet': u'lobata'},
+            create=False, update=False)
+        self.assertEquals(obj.price, 19.50)
+
+    def test_atomic_value_verbatim(self):
+        obj = Species.retrieve_or_create(
+            self.session, {'object': 'taxon',
+                           'ht-rank': 'genus',
+                           'rank': 'species',
+                           'ht-epithet': u'Laelia',
+                           'epithet': u'lobata'},
+            create=False, update=False)
+        self.assertEquals(obj.price_tag, '$19.50')
+
+    def test_list_value(self):
+        obj = Species.retrieve_or_create(
+            self.session, {'object': 'taxon',
+                           'ht-rank': 'genus',
+                           'rank': 'species',
+                           'ht-epithet': u'Laelia',
+                           'epithet': u'lobata'},
+            create=False, update=False)
+        self.assertEquals(obj.list_var, ['abc', 'def'])
+
+    def test_dict_value(self):
+        obj = Species.retrieve_or_create(
+            self.session, {'object': 'taxon',
+                           'ht-rank': 'genus',
+                           'rank': 'species',
+                           'ht-epithet': u'Laelia',
+                           'epithet': u'lobata'},
+            create=False, update=False)
+        self.assertEquals(obj.dict_var, {'k': 'abc', 'l': 'def', 'm': 'xyz'})
+
+
 class ConservationStatus_test(PlantTestCase):
     "can retrieve the IUCN conservation status as defined in species"
 
@@ -1686,10 +1735,6 @@ class PresenterTest(PlantTestCase):
         raise SkipTest('Not Implemented')  # presenter uses view internals
 
 
-from bauble.plugins.plants.species import (
-    species_markup_func, vernname_markup_func)
-
-
 class GlobalFunctionsTest(PlantTestCase):
     def test_species_markup_func(self):
         eCo = Species.retrieve_or_create(
@@ -1706,21 +1751,22 @@ class GlobalFunctionsTest(PlantTestCase):
                            'rank': 'species',
                            'epithet': u'lobata'},
             create=False, update=False)
-        first, second = species_markup_func(eCo)
-        self.assertEquals(remove_zws(first), u'<i>Maxillaria</i> <i>variabilis</i>')
+        first, second = eCo.search_view_markup_pair()
+        self.assertTrue(remove_zws(first).startswith(
+            u'<i>Maxillaria</i> <i>variabilis</i>'))
+        expect = '<i>Maxillaria</i> <i>variabilis</i> <span weight="light">'\
+            'Bateman ex Lindl.</span><span foreground="#555555" size="small" '\
+            'weight="light"> - synonym of <i>Encyclia</i> <i>cochleata</i> '\
+            '(L.) Lemée</span>'
+        self.assertEquals(remove_zws(first), expect)
         self.assertEquals(second, u'Orchidaceae -- SomeName, SomeName 2')
-        first, second = species_markup_func(model)
+        first, second = model.search_view_markup_pair()
         self.assertEquals(remove_zws(first), u'<i>Laelia</i> <i>lobata</i>')
         self.assertEquals(second, u'Orchidaceae')
 
-    def test_species_markup_func_none(self):
-        first, second = species_markup_func(None)
-        self.assertEquals(first, u'...')
-        self.assertEquals(second, u'...')
-
     def test_vername_markup_func(self):
         vName = self.session.query(VernacularName).filter_by(id=1).one()
-        first, second = vernname_markup_func(vName)
+        first, second = vName.search_view_markup_pair()
         self.assertEquals(remove_zws(second), u'<i>Maxillaria</i> <i>variabilis</i>')
         self.assertEquals(first, u'SomeName')
 

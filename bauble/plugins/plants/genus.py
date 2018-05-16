@@ -84,7 +84,7 @@ def remove_callback(genera):
     """
     genus = genera[0]
     from bauble.plugins.plants.species_model import Species
-    session = db.Session()
+    session = object_session(genus)
     nsp = session.query(Species).filter_by(genus_id=genus.id).count()
     safe_str = utils.xml_safe(str(genus))
     if nsp > 0:
@@ -104,8 +104,6 @@ def remove_callback(genera):
         msg = _('Could not delete.\n\n%s') % utils.xml_safe(e)
         utils.message_details_dialog(msg, traceback.format_exc(),
                                      type=gtk.MESSAGE_ERROR)
-    finally:
-        session.close()
     return True
 
 
@@ -120,14 +118,7 @@ remove_action = Action('genus_remove', _('_Delete'), callback=remove_callback,
 genus_context_menu = [edit_action, add_species_action, remove_action]
 
 
-def genus_markup_func(genus):
-    '''
-    '''
-    # TODO: the genus should be italicized for markup
-    return utils.xml_safe(genus), utils.xml_safe(genus.family)
-
-
-class Genus(db.Base, db.Serializable):
+class Genus(db.Base, db.Serializable, db.WithNotes):
     """
     :Table name: genus
 
@@ -169,6 +160,11 @@ class Genus(db.Base, db.Serializable):
 
     rank = 'genus'
     link_keys = ['accepted']
+
+    def search_view_markup_pair(self):
+        '''provide the two lines describing object for SearchView row.
+        '''
+        return utils.xml_safe(self), utils.xml_safe(self.family)
 
     @property
     def cites(self):
@@ -240,6 +236,9 @@ class Genus(db.Base, db.Serializable):
     def accepted(self):
         'Name that should be used if name of self should be rejected'
         session = object_session(self)
+        if not session:
+            logger.warn('genus:accepted - object not in session')
+            return None
         syn = session.query(GenusSynonym).filter(
             GenusSynonym.synonym_id == self.id).first()
         accepted = syn and syn.genus
@@ -252,7 +251,10 @@ class Genus(db.Base, db.Serializable):
         if self in value.synonyms:
             return
         # remove any previous `accepted` link
-        session = object_session(self) or db.Session()
+        session = object_session(self)
+        if not session:
+            logger.warn('genus:accepted.setter - object not in session')
+            return
         session.query(GenusSynonym).filter(
             GenusSynonym.synonym_id == self.id).delete()
         session.commit()
@@ -844,57 +846,6 @@ from bauble.plugins.plants.species_model import Species
 #
 
 
-class LinksExpander(view.LinksExpander):
-
-    """
-    A collection of link buttons to use for internet searches.
-    """
-
-    def __init__(self):
-        super(LinksExpander, self).__init__("notes")
-        buttons = []
-
-        import bauble.utils.web as web
-        self.google_button = web.GoogleButton()
-        buttons.append(self.google_button)
-
-        self.gbif_button = web.GBIFButton()
-        buttons.append(self.gbif_button)
-
-        self.itis_button = web.ITISButton()
-        buttons.append(self.itis_button)
-
-        self.ipni_button = web.IPNIButton()
-        buttons.append(self.ipni_button)
-
-        self.grin_button = web.GRINButton()
-        buttons.append(self.grin_button)
-
-        self.bgci_button = web.BGCIButton()
-        buttons.append(self.bgci_button)
-
-        self.tpl_button = web.TPLButton()
-        buttons.append(self.tpl_button)
-
-        self.tropicos_button = web.TropicosButton()
-        buttons.append(self.tropicos_button)
-
-        for b in buttons:
-            b.set_alignment(0, -1)
-            self.vbox.pack_start(b)
-
-    def update(self, row):
-        super(LinksExpander, self).update(row)
-        self.google_button.set_string(row)
-        self.gbif_button.set_string(row)
-        self.itis_button.set_string(row)
-        self.ipni_button.set_keywords(genus=row.genus, species='')
-        self.grin_button.set_string(row)
-        self.bgci_button.set_keywords(genus=row.genus, species='')
-        self.tpl_button.set_keywords(genus=row.genus, species='')
-        self.tropicos_button.set_keywords(genus=row.genus, species='')
-
-
 class GeneralGenusExpander(InfoExpander):
     '''
     expander to present general information about a genus
@@ -925,7 +876,7 @@ class GeneralGenusExpander(InfoExpander):
 
         def on_nacc_clicked(*args):
             g = self.current_obj
-            cmd = 'acc where species.genus.genus="%s" ' \
+            cmd = 'accession where species.genus.genus="%s" ' \
                 'and species.genus.qualifier="%s"' \
                 % (g.genus, g.qualifier)
             bauble.gui.send_command(cmd)
@@ -946,7 +897,7 @@ class GeneralGenusExpander(InfoExpander):
 
         :param row: the row to get the values from
         '''
-        session = db.Session()
+        session = object_session(row)
         self.current_obj = row
         self.widget_set_value('gen_name_data', '<big>%s</big> %s' %
                               (row, utils.xml_safe(unicode(row.author))),
@@ -992,7 +943,6 @@ class GeneralGenusExpander(InfoExpander):
                               filter_by(id=row.id).distinct().count())
             self.widget_set_value('gen_nplants_data', '%s in %s accessions'
                                   % (nplants, nacc_in_plants))
-        session.close()
 
 
 class SynonymsExpander(InfoExpander):
@@ -1016,7 +966,6 @@ class SynonymsExpander(InfoExpander):
         syn_box.foreach(syn_box.remove)
         # use True comparison in case the preference isn't set
         self.set_expanded(prefs[self.expanded_pref] is True)
-        self.session = object_session(row)
         logger.debug("genus %s is synonym of %s and has synonyms %s" %
                      (row, row.accepted, row.synonyms))
         self.set_label(_("Synonyms"))  # reset default value
@@ -1056,6 +1005,17 @@ class GenusInfoBox(InfoBox):
     """
     """
     def __init__(self):
+        button_defs = [
+            {'name': 'GoogleButton', '_base_uri': "http://www.google.com/search?q=%s", '_space': '+', 'title': "Search Google", 'tooltip': None, },
+            {'name': 'GBIFButton', '_base_uri': "http://www.gbif.org/species/search?q=%s", '_space': '+', 'title': _("Search GBIF"), 'tooltip': _("Search the Global Biodiversity Information Facility"), },
+            {'name': 'ITISButton', '_base_uri': "http://www.itis.gov/servlet/SingleRpt/SingleRpt?search_topic=Scientific_Name&search_value=%s&search_kingdom=Plant&search_span=containing&categories=All&source=html&search_credRating=All", '_space': '%20', 'title': _("Search ITIS"), 'tooltip': _("Search the Intergrated Taxonomic Information System"), },
+            {'name': 'GRINButton', '_base_uri': "http://www.ars-grin.gov/cgi-bin/npgs/swish/accboth?query=%s&submit=Submit+Text+Query&si=0", '_space': '+', 'title': _("Search NPGS/GRIN"), 'tooltip': _('Search National Plant Germplasm System'), },
+            {'name': 'ALAButton', '_base_uri': "http://bie.ala.org.au/search?q=%s", '_space': '+', 'title': _("Search ALA"), 'tooltip': _("Search the Atlas of Living Australia"), },
+            {'name': 'IPNIButton', '_base_uri': "http://www.ipni.org/ipni/advPlantNameSearch.do?find_genus=%(genus)s&find_isAPNIRecord=on& find_isGCIRecord=on&find_isIKRecord=on&output_format=normal", '_space': ' ', 'title': _("Search IPNI"), 'tooltip': _("Search the International Plant Names Index"), },
+            {'name': 'BGCIButton', '_base_uri': "http://www.bgci.org/plant_search.php?action=Find&ftrGenus=%(genus)s&ftrRedList=&ftrRedList1997=&ftrEpithet=&ftrCWR=&x=0&y=0#results", '_space': ' ', 'title': _("Search BGCI"), 'tooltip': _("Search Botanic Gardens Conservation International"), },
+            {'name': 'TPLButton', '_base_uri': "http://www.theplantlist.org/tpl1.1/search?q=%(genus)s", '_space': '+', 'title': _("Search TPL"), 'tooltip': _("Search The Plant List online database"), },
+            {'name': 'TropicosButton', '_base_uri': "http://tropicos.org/NameSearch.aspx?name=%(genus)s", '_space': '+', 'title': _("Search Tropicos"), 'tooltip': _("Search Tropicos (MissouriBG) online database"), },
+            ]
         InfoBox.__init__(self)
         filename = os.path.join(paths.lib_dir(), 'plugins', 'plants',
                                 'infoboxes.glade')
@@ -1064,7 +1024,7 @@ class GenusInfoBox(InfoBox):
         self.add_expander(self.general)
         self.synonyms = SynonymsExpander(self.widgets)
         self.add_expander(self.synonyms)
-        self.links = LinksExpander()
+        self.links = view.LinksExpander('notes', button_defs)
         self.add_expander(self.links)
         self.props = PropertiesExpander()
         self.add_expander(self.props)

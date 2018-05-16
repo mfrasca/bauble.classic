@@ -26,6 +26,7 @@ from sqlalchemy.orm import class_mapper
 
 import datetime
 import os
+import re
 import bauble.error as error
 from bauble.i18n import _
 
@@ -100,11 +101,11 @@ class HistoryExtension(orm.MapperExtension):
         Add a new entry to the history table.
         """
         user = None
-        from bauble import db
         try:
-            if db.engine.name in ('postgres', 'postgresql'):
-                import bauble.plugins.users as users
-                user = users.current_user()
+            if engine.name.startswith('sqlite'):
+                raise TypeError("this engine know nothing of users")
+            import bauble.plugins.users as users
+            user = users.current_user()
         except:
             if 'USER' in os.environ and os.environ['USER']:
                 user = os.environ['USER']
@@ -152,6 +153,11 @@ class MapperBase(DeclarativeMeta):
             cls.__mapper_args__ = {'extension': HistoryExtension()}
         if 'top_level_count' not in dict_:
             cls.top_level_count = lambda x: {classname: 1}
+        if 'search_view_markup_pair' not in dict_:
+            cls.search_view_markup_pair = lambda x: (
+                utils.xml_safe(str(x)),
+                '(%s)' % type(x).__name__)
+
         super(MapperBase, cls).__init__(classname, bases, dict_)
 
 
@@ -260,7 +266,7 @@ def open(uri, verify=True, show_error_dialogs=False):
     poolclass = SingletonThreadPool
     new_engine = sa.create_engine(uri, echo=SQLALCHEMY_DEBUG,
                                   implicit_returning=False,
-                                  poolclass=poolclass)
+                                  poolclass=poolclass, pool_size=20)
     # TODO: there is a problem here: the code may cause an exception, but we
     # immediately loose the 'new_engine', which should know about the
     # encoding used in the exception string.
@@ -275,7 +281,12 @@ def open(uri, verify=True, show_error_dialogs=False):
         global Session, engine
         engine = new_engine
         metadata.bind = engine  # make engine implicit for metadata
+        def temp():
+            import inspect
+            logger.debug('creating session %s' % str(inspect.stack()[1]))
+            return sessionmaker(bind=engine, autoflush=False)()
         Session = sessionmaker(bind=engine, autoflush=False)
+        Session = temp
 
     if new_engine is not None and not verify:
         _bind()
@@ -456,6 +467,39 @@ def verify_connection(engine, show_error_dialogs=False):
     return True
 
 
+class WithNotes:
+
+    key_pattern = re.compile(r'{[^:]+:(.*)}')
+
+    def __getattr__(self, name):
+        '''retrieve value from corresponding note(s)
+
+        the result can be an atomic value, a list, or a dictionary.
+        '''
+
+        result = []
+        is_dict = False
+        for n in self.notes:
+            if n.category == ('[%s]' % name):
+                result.append(n.note)
+            elif n.category.startswith('{%s' % name):
+                is_dict = True
+                match = self.key_pattern.match(n.category)
+                key = match.group(1)
+                result.append((key, n.note))
+            elif n.category == ('<%s>' % name):
+                try:
+                    return eval(n.note)
+                except:
+                    return n.note
+        if result == []:
+            # if nothing was found, do not break the proxy.
+            return Base.__getattr__(self, name)
+        if is_dict:
+            return dict(result)
+        return result
+
+
 class DefiningPictures:
 
     @property
@@ -463,39 +507,13 @@ class DefiningPictures:
         '''a list of gtk.Image objects
         '''
 
-        import glib
-        import bauble.prefs as prefs
-        pfolder = prefs.prefs[prefs.picture_root_pref]
         result = []
         for n in self.notes:
             if n.category != '<picture>':
                 continue
-            filename = os.path.join(pfolder, n.note)
-            im = gtk.Image()
-            try:
-                pixbuf = gtk.gdk.pixbuf_new_from_file(
-                    os.path.join(prefs.prefs[prefs.picture_root_pref],
-                                 filename))
-                pixbuf = pixbuf.apply_embedded_orientation()
-                scale_x = pixbuf.get_width() / 400
-                scale_y = pixbuf.get_height() / 400
-                scale = max(scale_x, scale_y, 1)
-                x = int(pixbuf.get_width() / scale)
-                y = int(pixbuf.get_height() / scale)
-                scaled_buf = pixbuf.scale_simple(x, y, gtk.gdk.INTERP_BILINEAR)
-                im.set_from_pixbuf(scaled_buf)
-            except glib.GError, e:
-                logger.debug("picture %s caused glib.GError %s" %
-                             (filename, e))
-                label = _('picture file %s not found.') % filename
-                im = gtk.Label()
-                im.set_text(label)
-            except Exception, e:
-                logger.warning("picture %s caused Exception %s" %
-                               (filename, e))
-                im = gtk.Label()
-                im.set_text(e)
-            result.append(im)
+            box = gtk.VBox()  # contains the image or the error message
+            utils.ImageLoader(box, n.note).start()
+            result.append(box)
         return result
 
 
@@ -575,38 +593,55 @@ class Serializable:
             if keys.get(k):
                 link_values[k] = keys[k]
 
+        logger.debug("link_values : %s" % str(link_values))
+
         for k in keys.keys():
             if k not in class_mapper(cls).mapped_table.c:
                 del keys[k]
         if 'id' in keys:
             del keys['id']
+        logger.debug('4 value of keys: %s' % keys)
 
         keys.update(extradict)
+        logger.debug('5 value of keys: %s' % keys)
 
-        ## completing the task of building the links
-        logger.debug("links? %s, %s" % (cls.link_keys, keys.keys()))
-        for key in cls.link_keys:
-            d = link_values.get(key)
-            if d is None:
-                continue
-            logger.debug('recursive call to construct_from_dict %s' % d)
-            obj = construct_from_dict(session, d)
-            keys[key] = obj
+        # early construct object before building links
+        if not is_in_session and create:
+            ## completing the task of building the links
+            logger.debug("links? %s, %s" % (cls.link_keys, keys.keys()))
+            for key in cls.link_keys:
+                d = link_values.get(key)
+                if d is None:
+                    continue
+                logger.debug('recursive call to construct_from_dict %s' % d)
+                obj = construct_from_dict(session, d)
+                keys[key] = obj
+            logger.debug("going to create new %s with %s" % (cls, keys))
+            result = cls(**keys)
+            session.add(result)
 
+        # or possibly reuse existing object
         if is_in_session and update:
             result = is_in_session
-            logger.debug("going to update %s with %s" % (result, keys))
-            if 'id' in keys:
-                del keys['id']
-            for k, v in keys.items():
-                if v is not None:
-                    setattr(result, k, v)
-            logger.debug('returning updated existing %s' % result)
-            return result
 
-        logger.debug("going to create new %s with %s" % (cls, keys))
-        result = cls(**keys)
-        session.add(result)
+            ## completing the task of building the links
+            logger.debug("links? %s, %s" % (cls.link_keys, keys.keys()))
+            for key in cls.link_keys:
+                d = link_values.get(key)
+                if d is None:
+                    continue
+                logger.debug('recursive call to construct_from_dict %s' % d)
+                obj = construct_from_dict(session, d)
+                keys[key] = obj
+
+        logger.debug("going to update %s with %s" % (result, keys))
+        if 'id' in keys:
+            del keys['id']
+        for k, v in keys.items():
+            if v is not None:
+                setattr(result, k, v)
+        logger.debug('returning updated existing %s' % result)
+
         session.flush()
 
         logger.debug('returning new %s' % result)
