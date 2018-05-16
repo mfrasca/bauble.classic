@@ -226,6 +226,7 @@ class GenericEditorView(object):
             self.get_window().set_transient_for(bauble.gui.window)
         self.response = None
         self.__attached_signals = []
+        self.boxes = set()
 
         # set the tooltips...use gtk.Tooltip api introducted in GTK+ 2.12
         for widget_name, markup in self._tooltips.iteritems():
@@ -246,6 +247,12 @@ class GenericEditorView(object):
                 self.connect(window, 'close', self.on_dialog_close)
                 self.connect(window, 'response', self.on_dialog_response)
         self.box = set()  # the top level, meant for warnings.
+
+    def cancel_threads(self):
+        pass
+
+    def update(self):
+        pass
 
     def run_file_chooser_dialog(
             self, text, parent, action, buttons, last_folder, target):
@@ -352,7 +359,11 @@ class GenericEditorView(object):
             doc = etree.parse(self.filename)
             self.signals = doc.xpath('//signal')
         for s in self.signals:
-            handler = getattr(target, s.get('handler'))
+            try:
+                handler = getattr(target, s.get('handler'))
+            except AttributeError, text:
+                logger.debug("AttributeError: %s" % text)
+                continue
             signaller = getattr(self.widgets, s.getparent().get('id'))
             handler_id = signaller.connect(s.get('name'), handler)
             self.__attached_signals.append((signaller, handler_id))
@@ -421,6 +432,18 @@ class GenericEditorView(object):
             obj.disconnect(sid)
         del self.__attached_signals[:]
 
+    def disconnect_widget_signals(self, widget):
+        """disconnect all signals attached to widget"""
+
+        removed = []
+        for obj, sid in self.__attached_signals:
+            if obj == widget:
+                widget.disconnect(sid)
+                removed.append((obj, sid))
+
+        for item in removed:
+            self.__attached_signals.remove(item)
+
     def get_window(self):
         """
         Return the top level window for view
@@ -430,16 +453,45 @@ class GenericEditorView(object):
         else:
             raise NotImplementedError
 
+    def __get_widget(self, widget):
+        p = widget
+        if isinstance(widget, gtk.Widget):
+            return widget
+        elif isinstance(widget, tuple):
+            if len(widget) == 1:
+                return self.__get_widget(widget[0])
+            parent, widget = widget[:-1], widget[-1]
+            parent = self.__get_widget(parent)
+            for c in parent.get_children():
+                if gtk.Buildable.get_name(c) == widget:
+                    return c
+        else:
+            return self.widgets[widget]
+        logger.warn('cannot solve widget reference %s' % str(p))
+        return None
+
+    def widget_append_page(self, widget, page, label):
+        widget = self.__get_widget(widget)
+        widget.append_page(page, label)
+
+    def widget_add(self, widget, child):
+        widget = self.__get_widget(widget)
+        widget.add(child)
+
+    def widget_get_model(self, widget):
+        widget = self.__get_widget(widget)
+        return widget.get_model()
+
     def widget_get_active(self, widget):
+        widget = self.__get_widget(widget)
         return widget.get_active()
 
     def widget_set_inconsistent(self, widget, value):
+        widget = self.__get_widget(widget)
         widget.set_inconsistent(value)
 
     def combobox_init(self, widget, values=None, cell_data_func=None):
-        combo = (isinstance(widget, gtk.Widget)
-                 and widget
-                 or self.widgets[widget])
+        combo = self.__get_widget(widget)
         model = gtk.ListStore(str)
         combo.clear()
         combo.set_model(model)
@@ -454,9 +506,7 @@ class GenericEditorView(object):
         return utils.setup_text_combobox(combo, values, cell_data_func)
 
     def combobox_remove(self, widget, item):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         if isinstance(item, StringTypes):
             # remove matching
             model = widget.get_model()
@@ -473,76 +523,52 @@ class GenericEditorView(object):
                            (type(item), item))
 
     def combobox_append_text(self, widget, value):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         widget.append_text(value)
 
     def combobox_prepend_text(self, widget, value):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         widget.prepend_text(value)
 
     def combobox_get_active_text(self, widget):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         return widget.get_active_text()
 
     def combobox_get_active(self, widget):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         return widget.get_active()
 
     def combobox_set_active(self, widget, index):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         widget.set_active(index)
 
     def combobox_get_model(self, widget):
         'get the list of values in the combo'
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         return widget.get_model()
 
     def widget_emit(self, widget, value):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         widget.emit(value)
 
-    def expander_set_expanded(self, widget, value):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+    def widget_set_expanded(self, widget, value):
+        widget = self.__get_widget(widget)
         widget.set_expanded(value)
 
     def widget_set_sensitive(self, widget, value=True):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
-        widget.set_sensitive(value)
+        widget = self.__get_widget(widget)
+        widget.set_sensitive(value and True or False)
 
     def widget_set_visible(self, widget, visible=True):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         widget.set_visible(visible)
 
     def widget_get_visible(self, widget):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         return widget.get_visible()
 
     def widget_get_value(self, widget, index=0):
-        widget = (isinstance(widget, gtk.Widget)
-                  and widget
-                  or self.widgets[widget])
+        widget = self.__get_widget(widget)
         return utils.get_widget_value(widget, index)
 
     def widget_set_value(self, widget, value, markup=False, default=None,
@@ -644,7 +670,6 @@ class GenericEditorView(object):
 
         return completion
 
-    # TODO: add the ability to pass a sort function
     # TODO: add a default value to set in the combo
     def init_translatable_combo(self, combo, translations, default=None,
                                 cmp=None):
@@ -668,6 +693,9 @@ class GenericEditorView(object):
         model = gtk.ListStore(object, str)
         if isinstance(translations, dict):
             translations = sorted(translations.iteritems(), key=lambda x: x[1])
+        if cmp is not None:
+            translations = sorted(translations,
+                                  cmp=lambda a, b: cmp(a[0], b[0]))
         for key, value in translations:
             model.append([key, value])
         combo.set_model(model)
@@ -707,6 +735,20 @@ class GenericEditorView(object):
         pass
 
 
+class MockDialog:
+    def __init__(self):
+        self.hidden = False
+
+    def hide(self):
+        self.hidden = True
+
+    def run(self):
+        pass
+
+    def show(self):
+        pass
+
+
 class MockView:
     '''mocking the view, but so generic that we share it among clients
     '''
@@ -714,6 +756,7 @@ class MockView:
         self.widgets = type('MockWidgets', (object, ), {})
         self.models = {}  # dictionary of list of tuples
         self.invoked = []
+        self.invoked_detailed = []
         self.visible = {}
         self.sensitive = {}
         self.expanded = {}
@@ -723,8 +766,10 @@ class MockView:
         self.reply_entry_dialog = []
         self.reply_yes_no_dialog = []
         self.reply_file_chooser_dialog = []
+        self.__window = MockDialog()
         for name, value in kwargs.items():
             setattr(self, name, value)
+        self.boxes = set()
 
     def get_selection(self):
         'fakes main UI search result - selection'
@@ -732,11 +777,14 @@ class MockView:
 
     def image_set_from_file(self, *args):
         self.invoked.append('image_set_from_file')
+        self.invoked_detailed.append((self.invoked[-1], args))
         pass
 
     def run_file_chooser_dialog(
             self, text, parent, action, buttons, last_folder, target):
+        args = [text, parent, action, buttons, last_folder, target]
         self.invoked.append('run_file_chooser_dialog')
+        self.invoked_detailed.append((self.invoked[-1], args))
         try:
             reply = self.reply_file_chooser_dialog.pop()
         except:
@@ -744,7 +792,9 @@ class MockView:
         self.widget_set_value(target, reply)
 
     def run_entry_dialog(self, title, parent, flags, buttons):
+        args = [title, parent, flags, buttons]
         self.invoked.append('run_entry_dialog')
+        self.invoked_detailed.append((self.invoked[-1], args))
         try:
             return self.reply_entry_dialog.pop()
         except:
@@ -753,9 +803,13 @@ class MockView:
     def run_message_dialog(self, msg, type=gtk.MESSAGE_INFO,
                            buttons=gtk.BUTTONS_OK, parent=None):
         self.invoked.append('run_message_dialog')
+        args = [msg, type, buttons, parent]
+        self.invoked_detailed.append((self.invoked[-1], args))
 
     def run_yes_no_dialog(self, msg, parent=None, yes_delay=-1):
         self.invoked.append('run_yes_no_dialog')
+        args = [msg, parent, yes_delay]
+        self.invoked_detailed.append((self.invoked[-1], args))
         try:
             return self.reply_yes_no_dialog.pop()
         except:
@@ -763,36 +817,44 @@ class MockView:
 
     def set_title(self, *args):
         self.invoked.append('set_title')
+        self.invoked_detailed.append((self.invoked[-1], args))
         pass
 
     def set_icon(self, *args):
         self.invoked.append('set_icon')
+        self.invoked_detailed.append((self.invoked[-1], args))
         pass
 
     def combobox_init(self, name, values=None, *args):
         self.invoked.append('combobox_init')
+        self.invoked_detailed.append((self.invoked[-1], [name, values, args]))
         self.models[name] = []
         for i in values or []:
             self.models[name].append((i, ))
 
     def connect_signals(self, *args):
         self.invoked.append('connect_signals')
+        self.invoked_detailed.append((self.invoked[-1], args))
         pass
 
     def set_label(self, *args):
         self.invoked.append('set_label')
+        self.invoked_detailed.append((self.invoked[-1], args))
         pass
 
     def connect_after(self, *args):
         self.invoked.append('connect_after')
+        self.invoked_detailed.append((self.invoked[-1], args))
         pass
 
     def widget_get_value(self, widget, *args):
         self.invoked.append('widget_get_value')
+        self.invoked_detailed.append((self.invoked[-1], [widget, args]))
         return self.values[widget]
 
     def widget_set_value(self, widget, value, *args):
         self.invoked.append('widget_set_value')
+        self.invoked_detailed.append((self.invoked[-1], [widget, value, args]))
         self.values[widget] = value
         if widget in self.models:
             if (value, ) in self.models[widget]:
@@ -802,40 +864,50 @@ class MockView:
 
     def connect(self, *args):
         self.invoked.append('connect')
+        self.invoked_detailed.append((self.invoked[-1], args))
         pass
 
     def widget_get_visible(self, name):
         self.invoked.append('widget_get_visible')
+        self.invoked_detailed.append((self.invoked[-1], [name]))
         return self.visible.get(name)
 
     def widget_set_visible(self, name, value=True):
         self.invoked.append('widget_set_visible')
+        self.invoked_detailed.append((self.invoked[-1], [name, value]))
         self.visible[name] = value
 
-    def expander_set_expanded(self, widget, value):
-        self.invoked.append('expander_set_expanded')
+    def widget_set_expanded(self, widget, value):
+        self.invoked.append('widget_set_expanded')
+        self.invoked_detailed.append((self.invoked[-1], [widget, value]))
         self.expanded[widget] = value
 
     def widget_set_sensitive(self, name, value=True):
         self.invoked.append('widget_set_sensitive')
-        self.sensitive[name] = value
+        self.invoked_detailed.append((self.invoked[-1], [name, value]))
+        self.sensitive[name] = value and True or False
 
     def widget_get_sensitive(self, name):
         self.invoked.append('widget_get_sensitive')
+        self.invoked_detailed.append((self.invoked[-1], [name]))
         return self.sensitive[name]
 
     def widget_set_inconsistent(self, *args):
         self.invoked.append('widget_set_inconsistent')
+        self.invoked_detailed.append((self.invoked[-1], args))
         pass
 
     def get_window(self):
+        return self.__window
         self.invoked.append('get_window')
+        self.invoked_detailed.append((self.invoked[-1], []))
         return None
 
     widget_get_active = widget_get_value
 
     def combobox_remove(self, name, item):
         self.invoked.append('combobox_remove')
+        self.invoked_detailed.append((self.invoked[-1], [name, item]))
         model = self.models.setdefault(name, [])
         if isinstance(item, int):
             del model[item]
@@ -844,34 +916,60 @@ class MockView:
 
     def combobox_append_text(self, name, value):
         self.invoked.append('combobox_append_text')
+        self.invoked_detailed.append((self.invoked[-1], [name, value]))
         model = self.models.setdefault(name, [])
         model.append((value, ))
 
     def combobox_prepend_text(self, name, value):
         self.invoked.append('combobox_prepend_text')
+        self.invoked_detailed.append((self.invoked[-1], [name, value]))
         model = self.models.setdefault(name, [])
         model.insert(0, (value, ))
 
     def combobox_set_active(self, widget, index):
         self.invoked.append('combobox_set_active')
+        self.invoked_detailed.append((self.invoked[-1], [widget, index]))
         self.index[widget] = index
         self.values[widget] = self.models[widget][index][0]
 
     def combobox_get_active_text(self, widget):
         self.invoked.append('combobox_get_active_text')
+        self.invoked_detailed.append((self.invoked[-1], [widget, ]))
         return self.values[widget]
 
     def combobox_get_active(self, widget):
         self.invoked.append('combobox_get_active')
+        self.invoked_detailed.append((self.invoked[-1], [widget, ]))
         return self.index.setdefault(widget, 0)
 
     def combobox_get_model(self, widget):
         self.invoked.append('combobox_get_model')
+        self.invoked_detailed.append((self.invoked[-1], [widget, ]))
         return self.models[widget]
 
     def set_accept_buttons_sensitive(self, sensitive=True):
         self.invoked.append('set_accept_buttons_sensitive')
+        self.invoked_detailed.append((self.invoked[-1], [sensitive, ]))
         pass
+
+    def mark_problem(self, widget):
+        pass
+
+    def add_message_box(self, message_box_type=utils.MESSAGE_BOX_INFO):
+        self.invoked.append('set_accept_buttons_sensitive')
+        self.invoked_detailed.append((self.invoked[-1], [message_box_type, ]))
+        return MockDialog()
+
+    def add_box(self, box):
+        self.invoked.append('add_box')
+        self.invoked_detailed.append((self.invoked[-1], [box, ]))
+        self.boxes.add(box)
+
+    def remove_box(self, box):
+        self.invoked.append('remove_box')
+        self.invoked_detailed.append((self.invoked[-1], [box, ]))
+        if box in self.boxes:
+            self.boxes.remove(box)
 
 
 class DontCommitException(Exception):
@@ -900,19 +998,26 @@ class GenericEditorPresenter(object):
     view_accept_buttons = []
 
     PROBLEM_DUPLICATE = random()
+    PROBLEM_EMPTY = random()
 
-    def __init__(self, model, view, refresh_view=False):
+    def __init__(self, model, view, refresh_view=False, session=None):
         self.model = model
         self.view = view
         self.problems = set()
         self._dirty = False
-        try:
-            self.session = object_session(model)
-        except UnmappedInstanceError:
-            if db.Session is not None:
-                self.session = db.Session()
-            else:
-                self.session = None
+        self.running_threads = []
+        self.owns_session = False
+        self.session = session
+        if session is None:
+            try:
+                self.session = object_session(model)
+            except UnmappedInstanceError:
+                if db.Session is not None:
+                    self.session = db.Session()
+                    self.owns_session = True
+                else:
+                    self.session = None
+
         #logger.debug("session, model, view = %s, %s, %s"
         #             % (self.session, model, view))
         if view:
@@ -933,6 +1038,16 @@ class GenericEditorPresenter(object):
             value = value is None and '' or value
             self.view.widget_set_value(widget, value)
 
+    def cancel_threads(self):
+        for k in self.running_threads:
+            k.cancel()
+        self.running_threads = []
+
+    def start_thread(self, thread):
+        self.running_threads.append(thread)
+        thread.start()
+        return thread
+
     def commit_changes(self):
         '''
         Commit the changes to self.session()
@@ -940,11 +1055,18 @@ class GenericEditorPresenter(object):
         objs = list(self.session)
         try:
             self.session.flush()
+            try:
+                bauble.gui.get_view().update()
+            except Exception, e:
+                pass
         except Exception, e:
             logger.warning(e)
             self.session.rollback()
             self.session.add_all(objs)
             raise
+        finally:
+            if self.owns_session:
+                self.session.close()
         return True
 
     def __set_model_attr(self, attr, value):
@@ -964,7 +1086,13 @@ class GenericEditorPresenter(object):
         return self.widget_to_field_map.get(self.__get_widget_name(widget))
 
     def on_textbuffer_changed(self, widget, value=None, attr=None):
-        "handle 'changed' signal on textbuffer widgets."
+        """handle 'changed' signal on textbuffer widgets.
+
+        this will not work directly. check the unanswered question
+        http://stackoverflow.com/questions/32106765/
+
+        to use it, you need pass the `attr` yourself.
+        """
 
         if attr is None:
             attr = self.__get_widget_attr(widget)
@@ -987,6 +1115,17 @@ class GenericEditorPresenter(object):
         logger.debug("on_text_entry_changed(%s, %s) - %s → %s"
                      % (widget, attr, getattr(self.model, attr), value))
         self.__set_model_attr(attr, value)
+        return value
+
+    def on_non_empty_text_entry_changed(self, widget, value=None):
+        "handle 'changed' signal on compulsory text entry widgets."
+
+        value = self.on_text_entry_changed(widget, value)
+        if not value:
+            self.add_problem(self.PROBLEM_EMPTY, widget)
+        else:
+            self.remove_problem(self.PROBLEM_EMPTY, widget)
+        return value
 
     def on_unique_text_entry_changed(self, widget, value=None):
         "handle 'changed' signal on text entry widgets with an uniqueness "
@@ -1037,8 +1176,9 @@ class GenericEditorPresenter(object):
 
     def on_relation_entry_changed(self, widget, value=None):
         attr = self.__get_widget_attr(widget)
-        logger.debug('calling unimplemented on_relation_entry_changed(%s, %s)'
-                     % (widget, attr))
+        logger.debug(
+            'calling unimplemented on_relation_entry_changed(%s, %s, %s(%s))'
+            % (widget, attr, type(value), value))
 
     def on_group_changed(self, widget, *args):
         "handle group-changed signal on radio-button"
@@ -1097,7 +1237,7 @@ class GenericEditorPresenter(object):
         map(lambda p: self.remove_problem(p[0], p[1]), tmp)
         self.problems.clear()
 
-    def remove_problem(self, problem_id, problem_widgets=None):
+    def remove_problem(self, problem_id, widget=None):
         """
         Remove problem_id from self.problems and reset the background
         color of the widget(s) in problem_widgets.  If problem_id is
@@ -1111,22 +1251,29 @@ class GenericEditorPresenter(object):
          of the widget
         """
         logger.debug('remove_problem(%s, %s, %s)' %
-                     (self, problem_id, problem_widgets))
-        if problem_id is None and problem_widgets is None:
+                     (self, problem_id, widget))
+        if problem_id is None and widget is None:
             logger.warning('invoke remove_problem with None, None')
             # if no problem id and not problem widgets then don't do anything
             return
 
+        if not isinstance(widget, (gtk.Widget, type(None))):
+            try:
+                widget = getattr(self.view.widgets, widget)
+            except:
+                logger.info("can't get widget %s" % widget)
+
         tmp = self.problems.copy()
         for p, w in tmp:
-            if (w == problem_widgets and p == problem_id) or \
-                    (problem_widgets is None and p == problem_id) or \
-                    (w == problem_widgets and problem_id is None):
-                if w:
+            if (w == widget and p == problem_id) or \
+                    (widget is None and p == problem_id) or \
+                    (w == widget and problem_id is None):
+                if w and not prefs.testing:
                     w.modify_bg(gtk.STATE_NORMAL, None)
                     w.modify_base(gtk.STATE_NORMAL, None)
                     w.queue_draw()
                 self.problems.remove((p, w))
+        logger.debug('problems now: %s' % self.problems)
 
     def add_problem(self, problem_id, problem_widgets=None):
         """
@@ -1140,17 +1287,19 @@ class GenericEditorPresenter(object):
           (default=None)
         """
         ## map case list of widget to list of cases single widget.
+        logger.debug('add_problem(%s, %s, %s)' %
+                     (self, problem_id, problem_widgets))
         if isinstance(problem_widgets, (tuple, list)):
             map(lambda w: self.add_problem(problem_id, w), problem_widgets)
 
         ## here single widget.
         widget = problem_widgets
-        self.problems.add((problem_id, widget))
         if not isinstance(widget, gtk.Widget):
             try:
                 widget = getattr(self.view.widgets, widget)
             except:
                 logger.info("can't get widget %s" % widget)
+        self.problems.add((problem_id, widget))
         from types import StringTypes
         if isinstance(widget, StringTypes):
             self.view.mark_problem(widget)
@@ -1158,6 +1307,7 @@ class GenericEditorPresenter(object):
             widget.modify_bg(gtk.STATE_NORMAL, self.problem_color)
             widget.modify_base(gtk.STATE_NORMAL, self.problem_color)
             widget.queue_draw()
+        logger.debug('problems now: %s' % self.problems)
 
     def init_enum_combo(self, widget_name, field):
         """
@@ -1296,6 +1446,8 @@ class GenericEditorPresenter(object):
         :param on_select: callback for when a value is selected from
           the list of completions
         """
+
+        logger.debug('assign_completions_handler %s' % widget)
         if not isinstance(widget, gtk.Entry):
             widget = self.view.widgets[widget]
         PROBLEM = hash(gtk.Buildable.get_name(widget))
@@ -1322,6 +1474,8 @@ class GenericEditorPresenter(object):
             gobject.idle_add(idle_callback, values)
 
         def on_changed(entry, *args):
+            logger.debug('assign_completions_handler::on_changed %s %s'
+                         % (entry, args))
             text = entry.get_text()
             comp = entry.get_completion()
             comp_model = comp.get_model()
@@ -1356,6 +1510,12 @@ class GenericEditorPresenter(object):
             if text == '':
                 on_select(None)
                 self.remove_problem(PROBLEM, widget)
+            elif not comp_model:
+                ## completion model is not in place when object is forced
+                ## programmatically.
+                on_select(text)  # `on_select` will know how to convert the
+                                 # text into a properly typed value.
+                self.remove_problem(PROBLEM, widget)
 
             return True
 
@@ -1381,7 +1541,9 @@ class GenericEditorPresenter(object):
         """
         run the dialog associated to the view
         """
-        return self.view.get_window().run()
+        result = self.view.get_window().run()
+        self.cleanup()
+        return result
 
     def cleanup(self):
         """
@@ -1467,6 +1629,10 @@ class GenericModelViewPresenterEditor(object):
         objs = list(self.session)
         try:
             self.session.flush()
+            try:
+                bauble.gui.get_view().update()
+            except Exception, e:
+                pass
         except Exception, e:
             logger.warning(e)
             self.session.rollback()
@@ -1713,6 +1879,7 @@ class PictureBox(NoteBox):
                     pixbuf = gtk.gdk.pixbuf_new_from_file(thumbname)
                 else:
                     fullbuf = gtk.gdk.pixbuf_new_from_file(filename)
+                    fullbuf = fullbuf.apply_embedded_orientation()
                     scale_x = fullbuf.get_width() / 400.0
                     scale_y = fullbuf.get_height() / 400.0
                     scale = max(scale_x, scale_y, 1)

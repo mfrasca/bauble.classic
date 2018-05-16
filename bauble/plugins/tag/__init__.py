@@ -205,8 +205,8 @@ class TagItemGUI(editor.GenericEditorView):
             model.remove(row_iter)
             _reset_tags_menu()
             view = bauble.gui.get_view()
-            if isinstance(view, SearchView):
-                view.reset_view()
+            if hasattr(view, 'update'):
+                view.update()
         except Exception, e:
             utils.message_details_dialog(utils.xml_safe(str(e)),
                                          traceback.format_exc(),
@@ -283,6 +283,29 @@ class Tag(db.Base):
     def _get_objects(self):
         return get_tagged_objects(self)
     objects = property(_get_objects)
+
+    def is_tagging(self, object):
+        """tell whether self tags object
+
+        """
+        _get_tagged_object_pairs(self)
+
+    @classmethod
+    def attached_to(cls, obj, session=None):
+        """return the list of tags attached to obj
+
+        this is a class method, so more classes can implement it.
+        """
+        if session is None:
+            from sqlalchemy.orm.session import object_session
+            session = object_session(obj)
+        modname = type(obj).__module__
+        clsname = type(obj).__name__
+        full_cls_name = '%s.%s' % (modname, clsname)
+        qto = session.query(TaggedObj).filter(
+            TaggedObj.obj_class == full_cls_name,
+            TaggedObj.obj_id == obj.id)
+        return [i.tag for i in qto.all()]
 
 
 class TaggedObj(db.Base):
@@ -498,6 +521,7 @@ def _on_add_tag_activated(*args):
         # tag but not all of them
         tagitem = TagItemGUI(values)
         tagitem.start()
+        view.update_bottom_notebook()
     else:
         msg = _('In order to tag an item you must first search for '
                 'something and select one of the results.')
@@ -539,8 +563,6 @@ def _reset_tags_menu():
         msg = _('Could not create the tags menus')
         utils.message_details_dialog(msg, traceback.format_exc(),
                                      gtk.MESSAGE_ERROR)
-    #	raise
-            #debug('** maybe the tags table hasn\'t been created yet')
 
     global _tags_menu_item
     if _tags_menu_item is None:
@@ -552,23 +574,27 @@ def _reset_tags_menu():
     session.close()
 
 
-def natsort_kids(kids):
-    """
-    """
-    return lambda(parent): sorted(getattr(parent, kids), key=utils.natsort_key)
-
-
 class TagPlugin(pluginmgr.Plugin):
 
     @classmethod
     def init(cls):
         from bauble.view import SearchView
+        from functools import partial
         mapper_search = search.get_strategy('MapperSearch')
         mapper_search.add_meta(('tag', 'tags'), Tag, ['tag'])
-        SearchView.view_meta[Tag].set(children=natsort_kids('objects'),
-                                      context_menu=tag_context_menu)
+        SearchView.row_meta[Tag].set(children=partial(db.natsort, 'objects'),
+                                     context_menu=tag_context_menu)
+        SearchView.bottom_info[Tag] = {
+            'page_widget': 'taginfo_scrolledwindow',
+            'fields_used': ['tag', 'description'],
+            'glade_name': os.path.join(paths.lib_dir(),
+                                       'plugins/tag/tag.glade'),
+            'name': _('Tags'),
+            }
         if bauble.gui is not None:
             _reset_tags_menu()
+        else:
+            pass
 
 
 plugin = TagPlugin

@@ -68,14 +68,15 @@ def register_command(handler):
     :param handler:  A class which extends pluginmgr.CommandHandler
     """
     global commands
+    logger.debug('registering command handler %s' % str(handler.command))
     if isinstance(handler.command, str):
-        #if handler.command in commands:
-        #    raise ValueError(_('%s already registered' % handler.command))
+        if handler.command in commands:
+            logger.info('overwriting command %s' % handler.command)
         commands[handler.command] = handler
     else:
         for cmd in handler.command:
-            #if cmd in commands:
-            #    raise ValueError(_('%s already registered' % cmd))
+            if cmd in commands:
+                logger.info('overwriting command %s' % cmd)
             commands[cmd] = handler
 
 
@@ -165,10 +166,10 @@ def init(force=False):
     2. Call each init() for each plugin the registry in order of dependency
     3. Register the command handlers in the plugin's commands[]
 
-    NOTE: This should be called after after Bauble has established a
-    connection to a database with db.open()
-    """
+    NOTE: This is called after after Bauble has created the GUI and
+    established a connection to a database with db.open()
 
+    """
     logger.debug('bauble.pluginmgr.init()')
     # ******
     # NOTE: Be careful not to keep any references to
@@ -237,9 +238,9 @@ def init(force=False):
             plugin.init()
             logger.debug('plugin %s initialized' % plugin)
         except KeyError, e:
-            # don't remove the plugin from the registry because if we
-            # find it again the user might decide to reinstall it
-            # which could overwrite data
+            # keep the plugin in the registry so if we find it again we do
+            # not offer the user the option to reinstall it, something which
+            # could overwrite data
             ordered.remove(plugin)
             msg = (_("The %(plugin_name)s plugin is listed in the registry "
                      "but isn't wasn't found in the plugin directory")
@@ -479,7 +480,35 @@ class View(gtk.VBox):
         If a class extends this View and provides its own __init__ it *must*
         call its parent (this) __init__
         """
+        filename = kwargs.get('filename')
+        if filename is not None:
+            del kwargs['filename']
+            root_widget_name = kwargs.get('root_widget_name')
+            del kwargs['root_widget_name']
         super(View, self).__init__(*args, **kwargs)
+        if filename is not None:
+            from bauble import utils, editor
+            self.widgets = utils.load_widgets(filename)
+            self.view = editor.GenericEditorView(
+                filename, root_widget_name=root_widget_name)
+            root_widget = getattr(self.view.widgets, root_widget_name)
+            widget = root_widget.get_children()[0]
+            self.view.widgets.remove_parent(widget)
+            self.add(widget)
+        self.running_threads = []
+
+    def cancel_threads(self):
+        for k in self.running_threads:
+            k.cancel()
+        self.running_threads = []
+
+    def start_thread(self, thread):
+        self.running_threads.append(thread)
+        thread.start()
+        return thread
+
+    def update(self):
+        pass
 
 
 class CommandHandler(object):

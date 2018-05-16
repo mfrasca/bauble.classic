@@ -275,7 +275,6 @@ class install(_install):
         _install.finalize_options(self)
 
     def run(self):
-        self.run_command('build')
         if sys.platform not in ('linux3', 'linux2', 'win32', 'darwin'):
             msg = "**Error: Can't install on this platform: %s" % sys.platform
             print msg
@@ -414,13 +413,14 @@ setuptools.setup(name="bauble",
                  package_dir=all_package_dirs,
                  package_data=package_data,
                  data_files=data_files,
-                 install_requires=["SQLAlchemy>=0.6",
-                                   "Pillow",
+                 install_requires=["SQLAlchemy==1.0.8",
+                                   "raven==5.9.2",
+                                   "Pillow==2.3.0",
                                    "lxml",
-                                   "mako>=0.2.2",
-                                   "gdata>=1.2.4",
+                                   "mako==0.9.1",
+                                   "gdata==2.0.18",
                                    "fibra==0.0.17",
-                                   "pyparsing>=1.5",
+                                   "pyparsing==2.0.1",
                                    'python-dateutil<2.0'] + needs_sqlite,
                  test_suite="nose.collector",
                  author="Mario Frasca",
@@ -428,7 +428,8 @@ setuptools.setup(name="bauble",
                  description="Bauble is a biodiversity collection manager "
                  "software application",
                  license="GPLv2+",
-                 keywords="database biodiversity botanic collection",
+                 keywords="database biodiversity botanic collection "
+                 "botany herbarium arboretum",
                  url="http://github.com/Bauble/bauble.classic/",
                  options=py2exe_options,
                  **py2exe_setup_args

@@ -139,26 +139,6 @@ def species_markup_func(species):
         return u'...', u'...'
 
 
-def species_get_kids(species):
-    try:
-        return sorted(species.accessions, key=utils.natsort_key)
-    except Exception:
-        return []
-
-
-def vernname_get_kids(vernname):
-    '''
-    '''
-    # TODO: should probably just create an accessions property on vername that
-    # does the same thing as vername.species.accessions and might even make
-    # it faster if we create the join directly instead of loading the species
-    # first
-    try:
-        return sorted(vernname.species.accessions, key=utils.natsort_key)
-    except Exception:
-        return []
-
-
 def vernname_markup_func(vernname):
     '''
     '''
@@ -274,7 +254,7 @@ class SynonymsExpander(InfoExpander):
         syn = self.session.query(SpeciesSynonym).filter(
             SpeciesSynonym.synonym_id == row.id).first()
         accepted = syn and syn.species
-        logger.debug("genus %s is synonym of %s and has synonyms %s" %
+        logger.debug("species %s is synonym of %s and has synonyms %s" %
                      (row, accepted, row.synonyms))
         self.set_label(_("Synonyms"))  # reset default value
         on_label_clicked = lambda l, e, syn: select_in_search_results(syn)
@@ -482,13 +462,6 @@ class SpeciesInfoBox(InfoBox):
         if isinstance(label, basestring):
             label = gtk.Label(label)
         self.insert_page(page, label, 0)
-
-        from bauble.plugins.picasa import PicasaInfoPage
-        page = PicasaInfoPage()
-        label = page.label
-        if isinstance(label, basestring):
-            label = gtk.Label(label)
-        self.insert_page(page, label, 1)
 
 
 class SpeciesInfoPage(InfoBoxPage):

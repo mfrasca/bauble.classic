@@ -1,6 +1,8 @@
+testme.py
 issues.txt
 .bzr
 doc/.build
+doc/*.txt
 .tx
 *~
 *pyc
@@ -32,3 +34,10 @@ doc/locale/
 bauble/plugins/plants/ipni.org/
 .build/
 cover/
+.project
+.pydevproject
+.settings/
+bauble/plugins/plants/default/ars-grin/?????.html
+bauble/plugins/plants/default/ars-grin/taxonomygenus.tar.gz
+bauble/plugins/plants/default/genera-conservanda-uniq.json
+bauble/plugins/plants/default/genera-conservanda.json

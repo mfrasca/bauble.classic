@@ -53,17 +53,9 @@ class TagTests(BaubleTestCase):
         self.family = Family(family=u'family')
         self.session.add(self.family)
         self.session.commit()
-        #for f in self.family_ids:
-        #    family_table.insert({'id': f, 'family': unicode(f)}).execute()
-        #for col in family_table.c:
-        #    utils.reset_sequence(col)
 
     def tearDown(self):
         super(TagTests, self).tearDown()
-        #self.session.bind.execute(family_table.delete())
-
-##     def test_get_tagged_objects(self):
-##         pass
 
     def test_str(self):
         """
@@ -243,3 +235,32 @@ class TagPresenterTests(BaubleTestCase):
         view = MockTagView()
         TagEditorPresenter(obj, view, refresh_view=True)
         self.assertEquals(view.widget_get_value("tag_name_entry"), u'1234')
+
+
+class AttachedToTests(BaubleTestCase):
+
+    def setUp(self):
+        super(AttachedToTests, self).setUp()
+        obj1 = Tag(tag=u'medicinal')
+        obj2 = Tag(tag=u'maderable')
+        obj3 = Tag(tag=u'frutal')
+        fam = Family(family=u'Solanaceae')
+        self.session.add_all([obj1, obj2, obj3, fam])
+        self.session.commit()
+
+    def test_attached_tags_empty(self):
+        fam = self.session.query(Family).one()
+        self.assertEquals(Tag.attached_to(fam), [])
+
+    def test_attached_tags_singleton(self):
+        fam = self.session.query(Family).one()
+        obj2 = self.session.query(Tag).filter(Tag.tag == u'maderable').one()
+        tag_plugin.tag_objects(obj2, [fam])
+        self.assertEquals(Tag.attached_to(fam), [obj2])
+
+    def test_attached_tags_many(self):
+        fam = self.session.query(Family).one()
+        tags = self.session.query(Tag).all()
+        for t in tags:
+            tag_plugin.tag_objects(t, [fam])
+        self.assertEquals(Tag.attached_to(fam), tags)

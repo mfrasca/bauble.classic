@@ -35,11 +35,8 @@ logger = logging.getLogger(__name__)
 import gtk
 
 from bauble.i18n import _
-import bauble.utils as utils
-from bauble.error import check
 import bauble
-import bauble.paths as paths
-import bauble.prefs as prefs
+from bauble import paths, prefs, utils
 
 from bauble.editor import (
     GenericEditorView, GenericEditorPresenter)
@@ -90,6 +87,80 @@ def type_combo_cell_data_func(combo, renderer, model, iter, data=None):
     renderer.set_property('text', dbtype)
 
 
+def newer_version_on_github(input_stream):
+    """is there a new patch on github for this production line
+
+    if the remote version is higher than the running one, return
+    something evaluating to True (possibly the remote version string).
+    otherwise, return something evaluating to False
+    """
+
+    try:
+        version_lines = input_stream.read().split('\n')
+        valid_lines = [i for i in version_lines
+                       if not i.startswith('#') and i.strip()]
+        if len(valid_lines) == 1:
+            try:
+                github_version = eval('"' + valid_lines[0].split('"')[1] + '"')
+            except:
+                logger.warning("can't parse github version.")
+                return False
+            github_patch = github_version.split('.')[2]
+            if int(github_patch) > int(bauble.version_tuple[2]):
+                return github_version
+            if int(github_patch) < int(bauble.version_tuple[2]):
+                logger.info("running unreleased version")
+    except TypeError:
+        logger.warning('TypeError while reading github stream')
+    except IndexError:
+        logger.warning('incorrect format for github version')
+    except ValueError:
+        logger.warning('incorrect format for github version')
+    return False
+
+
+def check_and_notify_new_version(view):
+    ## check whether there's a newer version on github.  this is executed in
+    ## a different thread, which does nothing or terminates the program.
+    version_on_github = (
+        'https://raw.githubusercontent.com/Ghini/ghini' +
+        '.desktop/ghini-%s.%s/bauble/version.py') % bauble.version_tuple[:2]
+    try:
+        import urllib2
+        import ssl
+        github_version_stream = urllib2.urlopen(
+            version_on_github, timeout=5)
+        remote = newer_version_on_github(github_version_stream)
+        if remote:
+            def show_message_box():
+                msg = _("newer ghini version %s available.\n"
+                        "continue, or exit to upgrade."
+                        ) % remote
+                box = view.add_message_box()
+                box.message = msg
+                box.show()
+                view.add_box(box)
+
+            # Any code that modifies the UI that is called from outside the
+            # main thread must be pushed into the main thread and called
+            # asynchronously in the main loop, with gobject.idle_add.
+            import gobject
+            gobject.idle_add(show_message_box)
+    except urllib2.URLError:
+        logger.info('connection is slow or down')
+        pass
+    except ssl.SSLError, e:
+        logger.info('SSLError %s while checking for newer version' % e)
+        pass
+    except urllib2.HTTPError:
+        logger.info('HTTPError while checking for newer version')
+        pass
+    except Exception, e:
+        logger.warning('unhandled %s(%s) while checking for newer version'
+                       % type(e), e)
+        pass
+
+
 class ConnMgrPresenter(GenericEditorPresenter):
     """
     The main class that starts the connection manager GUI.
@@ -115,7 +186,8 @@ class ConnMgrPresenter(GenericEditorPresenter):
 
     def __init__(self, view=None):
         self.filename = self.database = self.host = self.user = \
-            self.pictureroot = self.connection_name = ''
+            self.pictureroot = self.connection_name = \
+            self.prev_connection_name = ''
         self.use_defaults = True
         self.passwd = False
         ## following two look like overkill, since they will be initialized
@@ -129,13 +201,14 @@ class ConnMgrPresenter(GenericEditorPresenter):
         view.combobox_init('type_combo', dbtypes, type_combo_cell_data_func)
         self.connection_names = []
         self.connections = prefs.prefs[bauble.conn_list_pref] or {}
-        for ith_connection_name in self.connections:
+        for ith_connection_name in sorted(self.connections):
             view.combobox_append_text('name_combo', ith_connection_name)
             self.connection_names.append(ith_connection_name)
         if self.connection_names:
             self.connection_name = prefs.prefs[bauble.conn_default_pref]
             if self.connection_name not in self.connections:
-                self.connection_name = self.connection_names[0]
+                self.prev_connection_name = \
+                    self.connection_name = self.connection_names[0]
             self.dbtype = None
             self.set_params()
         else:
@@ -150,6 +223,10 @@ class ConnMgrPresenter(GenericEditorPresenter):
             view.set_icon(gtk.gdk.pixbuf_new_from_file(bauble.default_icon))
         except:
             pass
+
+        from threading import Thread
+        self.start_thread(Thread(target=check_and_notify_new_version,
+                                 args=[self.view]))
 
     def on_file_btnbrowse_clicked(self, *args):
         previously = self.view.widget_get_value('file_entry')
@@ -166,7 +243,7 @@ class ConnMgrPresenter(GenericEditorPresenter):
         last_folder, bn = os.path.split(previously)
         self.view.run_file_chooser_dialog(
             _("Choose a file..."), None,
-            action=gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER,
+            action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
             buttons=(gtk.STOCK_OK, gtk.RESPONSE_ACCEPT,
                      gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL),
             last_folder=last_folder, target='pictureroot_entry')
@@ -176,7 +253,7 @@ class ConnMgrPresenter(GenericEditorPresenter):
         last_folder, bn = os.path.split(previously)
         self.view.run_file_chooser_dialog(
             _("Choose a file..."), None,
-            action=gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER,
+            action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
             buttons=(gtk.STOCK_OK, gtk.RESPONSE_ACCEPT,
                      gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL),
             last_folder=last_folder, target='pictureroot2_entry')
@@ -187,9 +264,12 @@ class ConnMgrPresenter(GenericEditorPresenter):
         if conn_dict is None or len(conn_dict.keys()) == 0:
             self.view.widget_set_visible('noconnectionlabel', True)
             self.view.widget_set_visible('expander', False)
+            self.prev_connection_name = None
+            self.view.widget_set_sensitive('connect_button', False)
         else:
             self.view.widget_set_visible('expander', True)
             self.view.widget_set_visible('noconnectionlabel', False)
+            self.view.widget_set_sensitive('connect_button', True)
             if self.dbtype == 'SQLite':
                 self.view.widget_set_visible('sqlite_parambox', True)
                 self.view.widget_set_visible('dbms_parambox', False)
@@ -219,7 +299,7 @@ class ConnMgrPresenter(GenericEditorPresenter):
             if not valid:
                 self.view.run_message_dialog(msg, gtk.MESSAGE_ERROR)
             if valid:
-                ## picture root is stored in global setting
+                ## picture root is also made available in global setting
                 prefs.prefs[prefs.picture_root_pref] = settings['pictures']
                 self.save_current_to_prefs()
         elif response == gtk.RESPONSE_CANCEL or \
@@ -269,17 +349,24 @@ class ConnMgrPresenter(GenericEditorPresenter):
         if self.connection_names:
             self.view.combobox_set_active('name_combo', 0)
 
-    def on_add_button_clicked(self, button, data=None):
+    def on_add_button_clicked(self, *args):
+        if not self.compare_prefs_to_saved(self.prev_connection_name):
+            msg = (_("Do you want to save your changes to %s ?")
+                   % self.prev_connection_name)
+            if self.view.run_yes_no_dialog(msg):
+                self.save_current_to_prefs()
+        self.prev_connection_name = None
         name = self.view.run_entry_dialog(
             _("Enter a connection name"),
             self.view.get_window(),
             gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
             (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
         if name is not '':
+            self.connection_name = name
             self.connection_names.insert(0, name)
             self.connections[name] = self.get_params(new=name)
             self.view.combobox_prepend_text('name_combo', name)
-            self.view.expander_set_expanded('expander', True)
+            self.view.widget_set_expanded('expander', True)
             self.view.combobox_set_active('name_combo', 0)
 
     def save_current_to_prefs(self):
@@ -293,8 +380,7 @@ class ConnMgrPresenter(GenericEditorPresenter):
         conn_dict = self.connections
         conn_dict[self.connection_name] = params
         prefs.prefs[bauble.conn_list_pref] = conn_dict
-        if not prefs.testing:
-            prefs.prefs.save()
+        prefs.prefs.save()
 
     def compare_prefs_to_saved(self, name):
         """
@@ -313,28 +399,30 @@ class ConnMgrPresenter(GenericEditorPresenter):
         """
         the name changed so fill in everything else
         """
-        prev_connection_name = self.connection_name
+        logger.debug('on_name_combo_changing from %s to %s' %
+                     (self.prev_connection_name, self.connection_name))
 
         conn_dict = self.connections
-        if prev_connection_name is not None and \
-                prev_connection_name in self.connection_names:
+        if self.prev_connection_name is not None and \
+                self.prev_connection_name in self.connection_names:
             ## we are leaving some valid settings
-            if prev_connection_name not in conn_dict:
-                msg = _("Do you want to save %s?") % prev_connection_name
+            if self.prev_connection_name not in conn_dict:
+                msg = _("Do you want to save %s?") % self.prev_connection_name
                 if self.view.run_yes_no_dialog(msg):
                     self.save_current_to_prefs()
                 else:
-                    self.remove_connection(prev_connection_name)
-            elif not self.compare_prefs_to_saved(prev_connection_name):
+                    self.remove_connection(self.prev_connection_name)
+            elif not self.compare_prefs_to_saved(self.prev_connection_name):
                 msg = (_("Do you want to save your changes to %s ?")
-                       % prev_connection_name)
+                       % self.prev_connection_name)
                 if self.view.run_yes_no_dialog(msg):
                     self.save_current_to_prefs()
 
         if self.connection_names:
             self.on_combo_changed(combo, data)  # this updates connection_name
+        logger.debug('on_name_combo_changed %s' % self.connection_name)
         logger.debug("changing form >%s< to >%s<" %
-                     (prev_connection_name, self.connection_name))
+                     (self.prev_connection_name, self.connection_name))
 
         if self.connection_name in conn_dict:
             ## we are retrieving connection info from the global settings
@@ -350,6 +438,7 @@ class ConnMgrPresenter(GenericEditorPresenter):
         else:  # this is for new connections
             self.view.combobox_set_active('type_combo', 0)
         self.refresh_view()
+        self.prev_connection_name = self.connection_name
 
     def get_passwd(self, title=_("Enter your password"), before_main=False):
         """
@@ -407,6 +496,7 @@ class ConnMgrPresenter(GenericEditorPresenter):
             return False, _("Please choose a name for this connection")
         valid = True
         msg = None
+        ## first check connection parameters, then pictures path
         if params['type'] == 'SQLite':
             filename = params['file']
             if not os.path.exists(filename):
@@ -438,10 +528,30 @@ class ConnMgrPresenter(GenericEditorPresenter):
             if params["host"] == "":
                 valid = False
                 fields.append(_("DBMS host name"))
-            if valid:
+            if not valid:
                 msg = _("Current connection does not specify the fields:\n"
                         "%s\n"
                         "Please specify and try again.") % "\n".join(fields)
+        if not valid:
+            return valid, msg
+        ## now check the params['pictures']
+        # if it's a file, things are not OK
+        root = params['pictures']
+        thumbs = os.path.join(root, 'thumbs')
+        # root should exist as a directory
+        if os.path.exists(root):
+            if not os.path.isdir(root):
+                valid = False
+                msg = _("Pictures root name occupied by non directory.")
+            elif os.path.exists(thumbs):
+                if not os.path.isdir(thumbs):
+                    valid = False
+                    msg = _("Thumbnails name occupied by non directory.")
+        else:
+            os.mkdir(root)
+        # root should contain the thumbs directory
+        if valid and not os.path.exists(thumbs):
+            os.mkdir(thumbs)
         return valid, msg
 
     def get_params(self, new=None):
@@ -475,12 +585,12 @@ class ConnMgrPresenter(GenericEditorPresenter):
         if self.dbtype == 'SQLite':
             self.filename = params['file']
             self.use_defaults = params['default']
-            self.pictureroot = params['pictures']
+            self.pictureroot = params.get('pictures', '')
         else:
             self.database = params['db']
             self.host = params['host']
             self.user = params['user']
-            self.pictureroot = params['pictures']
+            self.pictureroot = params.get('pictures', '')
             self.passwd = params['passwd']
         self.refresh_view()
 
