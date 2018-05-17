@@ -281,7 +281,7 @@ class install(_install):
             sys.exit(1)
 
         # create build/share directory
-        dir_util.mkpath(os.path.join(self.build_base, 'share'))
+        dir_util.mkpath(os.path.join(self.build_base, 'share', 'bauble'))
 
         if not self.single_version_externally_managed:
             self.do_egg_install()
@@ -303,7 +303,7 @@ class install(_install):
 
         file_util.copy_file(
             "LICENSE",
-            os.path.join(self.install_data, 'share', 'LICENSE.bauble'))
+            os.path.join(self.install_data, 'share', 'bauble', 'LICENSE'))
 
 
 # docs command
@@ -338,10 +338,10 @@ class docs(Command):
 
 # clean command
 class clean(Command):
-    user_options = []
+    user_options = [('all', 'a', 'clean all - has no effect')]
 
     def initialize_options(self):
-        pass
+        self.all = False
 
     def finalize_options(self):
         pass

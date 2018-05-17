@@ -1,0 +1,66 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" (C) Copyright 2018 Mario Frasca <mario@anche.no>,
+.\"
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH BAUBLE-ADMIN 1 "May 17 2018"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+bauble-admin \- mostly undocumented
+.SH SYNOPSIS
+.B bauble-admin
+.SH DESCRIPTION
+\fBbauble-admin\fP is part of \fBbauble\fP, and helps with database administation.
+.PP
+.\" TeX users may be more comfortable with the \fB<whatever>\fP and
+.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
+.\" respectively.
+\fBbauble-admin\fP is a program that used to directly connect to a database
+and perform operations with it.  The last project maintainer was never aware
+of the existence of this program.  Please find out by yourself if it is at
+all useful, and document it.
+.sp
+Please do not use unless you understand what it does.
+.SH OPTIONS
+This programs follow the usual GNU command line syntax, with long
+options starting with two dashes (`-').
+A summary of options is included below.
+.TP
+.B \-h, \-\-host
+ the host to connect to
+.TP
+.B \-u, \-\-user
+the user name to use when connecting to the server
+.TP
+.B \-P, \-\-port'
+the port on the server to connect to
+.TP
+.B \-o, \-\-owner'
+the owner of the newly created database, if not set  then use the user name
+.TP
+.B \-p
+ask for a password
+.TP
+.B \-d, \-\-dbtype
+the database type
+.TP
+.B \-v, \-\-verbose
+verbose output
+.TP
+.B -y, \-\-dryrun
+don't execute anything
+.TP
+.B \-h, \-\-help
+Show summary of options.

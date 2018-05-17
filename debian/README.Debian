@@ -1,0 +1,14 @@
+bauble for Debian
+----------------
+
+bauble-1.0.56-1 is the last release for bauble.classic.  bauble has been
+frozen at version 0.9.7 in Debian and most Debian based distributions, now
+it is finally being updated.
+
+Do not expect a subsequent version after 1.0.56, this is the last bauble-1.0
+you will ever see: the program has been adopted into Ghini, a different
+github-hosted project, and that's where you should report bugs and express
+wishes.
+
+ -- Mario Frasca <mario@anche.no>  Thu, 17 May 2018 14:58:49 -0500
+

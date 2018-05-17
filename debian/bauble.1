@@ -1,0 +1,52 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" (C) Copyright 2018 Mario Frasca <mario@anche.no>,
+.\"
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH BAUBLE 1 "May 17 2018"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+bauble \- biodiversity collection manager
+.SH SYNOPSIS
+.B bauble
+.SH DESCRIPTION
+\fBBauble\fP and in particular \fBbauble.classic\fP is a desktop app for
+managing plant collections.  \fBBauble\fP is intended to be used by botanic
+gardens, herbaria, arboreta, etc. to manage their collection information.
+.sp
+Bauble is cross-platform, as long as your computer has python, and gtk,
+Bauble should be able to run on it.
+.sp
+Bauble can use different database backends and is tested against SQLite, PostgreSQL, MySQL/MariaDB.
+.sp
+Bauble can generate reports through the extremely flexible Mako
+formatter. This allows you to layout your data any way you wish and save it
+in a just about any format you can imagine including XML, or HTML.
+.sp
+Bauble lets you add notes to most objects and lets you tag any kind of
+object.  Notes let you associate arbitrary text to objects, and you can
+later find them back using bauble's powerful search language.  Tags let you
+create collections of records organized the way you want with names you give
+them.
+.sp
+More recently the \fBbauble.classic\fP project has been adopted by Ghini, to
+become \fBghini.desktop\fP.  Ghini is not yet distributed as a Debian
+package, you can install it by \fBpip install ghini\fP, which is cross
+platform, easier for the developers, and not acceptable within Debian.
+.PP
+.\" TeX users may be more comfortable with the \fB<whatever>\fP and
+.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
+.\" respectively.
+.br

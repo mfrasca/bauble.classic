@@ -749,8 +749,8 @@ class GUI(object):
         about.set_copyright(_(u'Copyright © by its contributors.'))
 
         import codecs
-        with codecs.open(os.path.join(paths.installation_dir(), 'share',
-                                      'LICENSE.bauble')) as f:
+        with codecs.open(os.path.join(paths.installation_dir(), 'share', 'bauble',
+                                      'LICENSE')) as f:
             license = f.read()
         about.set_license(license)  # not translated
         about.run()
