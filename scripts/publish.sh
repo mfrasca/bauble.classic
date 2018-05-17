@@ -9,6 +9,6 @@ cp dist/bauble-${VERSION}.tar.gz /tmp/bauble-${VERSION}.orig.tar.gz
   cd bauble-${VERSION}/
   dh_make --yes --indep --file ../bauble-${VERSION}.orig.tar.gz )
 cp debian/* /tmp/bauble-${VERSION}/debian
-rm /tmp/bauble-${VERSION}/debian/*.ex /tmp/bauble-${VERSION}/debian/*.EX
+rm /tmp/bauble-${VERSION}/debian/*.{ex,EX,source}
 cd /tmp/bauble-${VERSION}/
 debuild
