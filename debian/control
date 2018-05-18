@@ -10,7 +10,7 @@ Package: bauble
 Architecture: all
 Depends: python-fibra (>=0.0.17), python-dateutil, python-pyqrcode, xdg-utils, python-egenix-mxdatetime, python-sqlalchemy (>= 0.8.4), python-lxml (>= 2.0), python-pyparsing, python-gtk2 (>= 2.12), librsvg2-common, python-glade2, python-gdata (>= 1.1.1), python-mako (>= 0.2.2), python-pysqlite2 (>= 2.3.2) | python-mysqldb | python-psycopg2, python:any (>= 2.7.5-5~), ${misc:Depends}
 Recommends: python-mysqldb | python-psycopg2
-Priority: extra
+Priority: optional
 Description: biodiversity collection manager software application
  Bauble is a software application to help you manage a collection of
  botanical specimens. It is intended to be used by botanic gardens,

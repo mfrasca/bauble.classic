@@ -1,5 +1,4 @@
 [Desktop Entry]
-Encoding=UTF-8
 Name=Bauble
 Version=1.0.56  # :bump
 Comment=An application for managing botanical collections
@@ -8,3 +7,4 @@ Icon=bauble
 Type=Application
 Exec=bauble
 Categories=Education;
+Keywords=Botany;Botanical;Collection;Database;Plants;Garden;Herbarium;Seed-bank
